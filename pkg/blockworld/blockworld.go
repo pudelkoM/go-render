@@ -39,6 +39,16 @@ type Angle3 struct {
 	Phi   float64 // azimuthal, "left-right"
 }
 
+func (a Angle3) ClampToView() Angle3 {
+	if a.Theta > 180 {
+		a.Theta = 180
+	}
+	if a.Theta < 0 {
+		a.Theta = 0
+	}
+	return a
+}
+
 func (a Angle3) Normalize() Angle3 {
 	return Angle3{
 		Theta: math.Mod(a.Theta, 360),

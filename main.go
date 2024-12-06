@@ -40,11 +40,11 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	}
 	if w.GetKey(glfw.KeyUp) == glfw.Press || w.GetKey(glfw.KeyUp) == glfw.Repeat {
 		world.PlayerDir.Theta += rotSpeed
-		world.PlayerDir = world.PlayerDir.Normalize()
+		world.PlayerDir = world.PlayerDir.ClampToView()
 	}
 	if w.GetKey(glfw.KeyDown) == glfw.Press || w.GetKey(glfw.KeyDown) == glfw.Repeat {
 		world.PlayerDir.Theta -= rotSpeed
-		world.PlayerDir = world.PlayerDir.Normalize()
+		world.PlayerDir = world.PlayerDir.ClampToView()
 	}
 	if w.GetKey(glfw.KeyLeft) == glfw.Press || w.GetKey(glfw.KeyLeft) == glfw.Repeat {
 		world.PlayerDir = world.PlayerDir.RotatePhi(-rotSpeed)
