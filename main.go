@@ -23,31 +23,33 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	if w.GetKey(glfw.KeyEscape) == glfw.Press {
 		w.SetShouldClose(true)
 	}
-	const speed = 0.1
+	const speed = 0.3
 	const rotSpeed = 3.
 	if w.GetKey(glfw.KeyA) == glfw.Press || w.GetKey(glfw.KeyA) == glfw.Repeat {
-		world.PlayerPos.Y -= speed
+		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.RotatePhi(-90).ToCartesianVec3(speed))
 	}
 	if w.GetKey(glfw.KeyS) == glfw.Press || w.GetKey(glfw.KeyS) == glfw.Repeat {
-		world.PlayerPos = world.PlayerPos.Sub(world.PlayerDir.Mul(speed))
+		world.PlayerPos = world.PlayerPos.Sub(world.PlayerDir.ToCartesianVec3(speed))
 	}
 	if w.GetKey(glfw.KeyD) == glfw.Press || w.GetKey(glfw.KeyD) == glfw.Repeat {
-		world.PlayerPos.Y += speed
+		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.RotatePhi(90).ToCartesianVec3(speed))
 	}
 	if w.GetKey(glfw.KeyW) == glfw.Press || w.GetKey(glfw.KeyW) == glfw.Repeat {
-		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.Mul(speed))
+		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.ToCartesianVec3(speed))
 	}
 	if w.GetKey(glfw.KeyUp) == glfw.Press || w.GetKey(glfw.KeyUp) == glfw.Repeat {
-		world.PlayerDir = world.PlayerDir.RotateY(rotSpeed).Normalize()
+		world.PlayerDir.Theta += rotSpeed
+		world.PlayerDir = world.PlayerDir.Normalize()
 	}
 	if w.GetKey(glfw.KeyDown) == glfw.Press || w.GetKey(glfw.KeyDown) == glfw.Repeat {
-		world.PlayerDir = world.PlayerDir.RotateY(-rotSpeed).Normalize()
+		world.PlayerDir.Theta -= rotSpeed
+		world.PlayerDir = world.PlayerDir.Normalize()
 	}
 	if w.GetKey(glfw.KeyLeft) == glfw.Press || w.GetKey(glfw.KeyLeft) == glfw.Repeat {
-		world.PlayerDir = world.PlayerDir.RotateZ(-rotSpeed).Normalize()
+		world.PlayerDir = world.PlayerDir.RotatePhi(-rotSpeed)
 	}
 	if w.GetKey(glfw.KeyRight) == glfw.Press || w.GetKey(glfw.KeyRight) == glfw.Repeat {
-		world.PlayerDir = world.PlayerDir.RotateZ(rotSpeed).Normalize()
+		world.PlayerDir = world.PlayerDir.RotatePhi(rotSpeed)
 	}
 }
 
@@ -56,15 +58,16 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.ZP, draw.Src)
 
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
-	fovHDeg := 95.
-	fovVDeg := fovHDeg / imgRatio
+	fovHDeg := 55.
+	fovVDeg := fovHDeg * imgRatio
 	degPerPixel := fovHDeg / float64(img.Rect.Dx())
 
 	for x := 0; x < img.Rect.Dx(); x++ {
 		xd := (-fovHDeg / 2) + float64(x)*degPerPixel
 		for y := 0; y < img.Rect.Dy(); y++ {
 			yd := (-fovVDeg / 2) + float64(y)*degPerPixel
-			rayVec := world.PlayerDir.RotateZ(xd).RotateY(yd).Normalize().Mul(0.25)
+			rayVec := blockworld.Angle3{Theta: world.PlayerDir.Theta + yd, Phi: world.PlayerDir.Phi + xd}.ToCartesianVec3(0.25)
+			// rayVec := world.PlayerDir.RotateZ(xd).RotateY(yd).Normalize().Mul(0.25)
 			newPos := world.PlayerPos
 			for i := 0; i < 100; i++ {
 				newPos = newPos.Add(rayVec)
@@ -127,7 +130,7 @@ func main() {
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 	}
 
-	const renderScale = 8
+	const renderScale = 16
 	var w, h = window.GetFramebufferSize()
 	w /= renderScale
 	h /= renderScale

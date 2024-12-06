@@ -33,6 +33,36 @@ type Vec3 struct {
 	X, Y, Z float64
 }
 
+// Angle3 is a 3D angle in degrees.
+type Angle3 struct {
+	Theta float64 // polar, "up-down"
+	Phi   float64 // azimuthal, "left-right"
+}
+
+func (a Angle3) Normalize() Angle3 {
+	return Angle3{
+		Theta: math.Mod(a.Theta, 360),
+		Phi:   math.Mod(a.Phi, 360),
+	}
+}
+
+func (a Angle3) RotatePhi(angle float64) Angle3 {
+	return Angle3{
+		Theta: a.Theta,
+		Phi:   a.Phi + angle,
+	}.Normalize()
+}
+
+func (a Angle3) ToCartesianVec3(r float64) Vec3 {
+	thetaRad := a.Theta * math.Pi / 180
+	phiRad := a.Phi * math.Pi / 180
+	return Vec3{
+		X: r * math.Sin(thetaRad) * math.Cos(phiRad),
+		Y: r * math.Sin(thetaRad) * math.Sin(phiRad),
+		Z: r * math.Cos(thetaRad),
+	}
+}
+
 func (v Vec3) Add(v2 Vec3) Vec3 {
 	return Vec3{
 		X: v.X + v2.X,
@@ -134,15 +164,15 @@ type Blockworld struct {
 	blocks      map[Point]Block
 	BlockSizePx int
 	PlayerPos   Vec3
-	PlayerDir   Vec3
+	PlayerDir   Angle3
 }
 
 func NewBlockworld() *Blockworld {
 	return &Blockworld{
 		blocks:      make(map[Point]Block),
 		BlockSizePx: blockSizePx,
-		PlayerPos:   Vec3{X: 0, Y: 0, Z: 0},
-		PlayerDir:   Vec3{X: 1, Y: 0, Z: 0},
+		PlayerPos:   Vec3{X: 0, Y: 0, Z: 3},
+		PlayerDir:   Angle3{Theta: 90, Phi: 0},
 	}
 }
 
@@ -171,4 +201,8 @@ func (bw *Blockworld) Randomize() {
 func (bw *Blockworld) Get(p Point) (*Block, bool) {
 	b, ok := bw.blocks[p]
 	return &b, ok
+}
+
+func (bw *Blockworld) Set(x, y, z int, b Block) {
+	bw.blocks[Point{x, y, z}] = b
 }
