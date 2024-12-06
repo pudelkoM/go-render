@@ -27,13 +27,13 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	const speed = 0.3
 	const rotSpeed = 3.
 	if w.GetKey(glfw.KeyA) == glfw.Press || w.GetKey(glfw.KeyA) == glfw.Repeat {
-		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.RotatePhi(-90).ToCartesianVec3(speed))
+		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.ResetTheta().RotatePhi(-90).ToCartesianVec3(speed))
 	}
 	if w.GetKey(glfw.KeyS) == glfw.Press || w.GetKey(glfw.KeyS) == glfw.Repeat {
 		world.PlayerPos = world.PlayerPos.Sub(world.PlayerDir.ToCartesianVec3(speed))
 	}
 	if w.GetKey(glfw.KeyD) == glfw.Press || w.GetKey(glfw.KeyD) == glfw.Repeat {
-		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.RotatePhi(90).ToCartesianVec3(speed))
+		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.ResetTheta().RotatePhi(90).ToCartesianVec3(speed))
 	}
 	if w.GetKey(glfw.KeyW) == glfw.Press || w.GetKey(glfw.KeyW) == glfw.Repeat {
 		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.ToCartesianVec3(speed))
@@ -67,7 +67,7 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 		xd := (-fovHDeg / 2) + float64(x)*degPerPixel
 		for y := 0; y < img.Rect.Dy(); y++ {
 			yd := (-fovVDeg / 2) + float64(y)*degPerPixel
-			rayVec := blockworld.Angle3{Theta: world.PlayerDir.Theta + yd, Phi: world.PlayerDir.Phi + xd}.ToCartesianVec3(1)
+			rayVec := blockworld.Angle3{Theta: world.PlayerDir.Theta + yd, Phi: world.PlayerDir.Phi + xd}.ToCartesianVec3(0.5)
 			newPos := world.PlayerPos
 			for i := 0; i < 150; i++ {
 				newPos = newPos.Add(rayVec)
@@ -144,6 +144,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	world.PlayerPos = blockworld.Vec3{X: 133, Y: 232, Z: 51}
+	world.PlayerDir = blockworld.Angle3{Theta: 99, Phi: 27}
 
 	var frameCount int64 = 0
 	var lastFrame = time.Now()

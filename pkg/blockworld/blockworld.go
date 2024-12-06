@@ -53,6 +53,20 @@ func (a Angle3) RotatePhi(angle float64) Angle3 {
 	}.Normalize()
 }
 
+func (a Angle3) RotateTheta(angle float64) Angle3 {
+	return Angle3{
+		Theta: a.Theta + angle,
+		Phi:   a.Phi,
+	}.Normalize()
+}
+
+func (a Angle3) ResetTheta() Angle3 {
+	return Angle3{
+		Theta: 90,
+		Phi:   a.Phi,
+	}
+}
+
 func (a Angle3) ToCartesianVec3(r float64) Vec3 {
 	thetaRad := a.Theta * math.Pi / 180
 	phiRad := a.Phi * math.Pi / 180
@@ -171,7 +185,7 @@ func NewBlockworld() *Blockworld {
 	return &Blockworld{
 		blocks:      make(map[Point]Block),
 		BlockSizePx: blockSizePx,
-		PlayerPos:   Vec3{X: 100, Y: 100, Z: 64},
+		PlayerPos:   Vec3{X: 170, Y: 170, Z: 64},
 		PlayerDir:   Angle3{Theta: 90, Phi: 45},
 	}
 }
@@ -196,6 +210,10 @@ func (bw *Blockworld) Randomize() {
 			}
 		}
 	}
+}
+
+func (bw *Blockworld) Blocks() map[Point]Block {
+	return bw.blocks
 }
 
 func (bw *Blockworld) Get(p Point) (*Block, bool) {

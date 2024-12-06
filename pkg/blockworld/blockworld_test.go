@@ -1,40 +1,43 @@
-package blockworld
+package blockworld_test
 
 import (
 	"math"
 	"testing"
+
+	"github.com/pudelkoM/go-render/pkg/blockworld"
+	"github.com/pudelkoM/go-render/pkg/maploader"
 )
 
 func TestVec3_RotateZ(t *testing.T) {
 	tests := []struct {
 		name     string
-		v        Vec3
+		v        blockworld.Vec3
 		angle    float64
-		expected Vec3
+		expected blockworld.Vec3
 	}{
 		{
 			name:     "rotate 90 degrees",
-			v:        Vec3{X: 1, Y: 0, Z: 0},
+			v:        blockworld.Vec3{X: 1, Y: 0, Z: 0},
 			angle:    90,
-			expected: Vec3{X: 0, Y: 1, Z: 0},
+			expected: blockworld.Vec3{X: 0, Y: 1, Z: 0},
 		},
 		{
 			name:     "rotate 180 degrees",
-			v:        Vec3{X: 1, Y: 0, Z: 0},
+			v:        blockworld.Vec3{X: 1, Y: 0, Z: 0},
 			angle:    180,
-			expected: Vec3{X: -1, Y: 0, Z: 0},
+			expected: blockworld.Vec3{X: -1, Y: 0, Z: 0},
 		},
 		{
 			name:     "rotate 270 degrees",
-			v:        Vec3{X: 1, Y: 0, Z: 0},
+			v:        blockworld.Vec3{X: 1, Y: 0, Z: 0},
 			angle:    270,
-			expected: Vec3{X: 0, Y: -1, Z: 0},
+			expected: blockworld.Vec3{X: 0, Y: -1, Z: 0},
 		},
 		{
 			name:     "rotate 360 degrees",
-			v:        Vec3{X: 1, Y: 0, Z: 0},
+			v:        blockworld.Vec3{X: 1, Y: 0, Z: 0},
 			angle:    360,
-			expected: Vec3{X: 1, Y: 0, Z: 0},
+			expected: blockworld.Vec3{X: 1, Y: 0, Z: 0},
 		},
 	}
 
@@ -51,53 +54,53 @@ func TestVec3_RotateZ(t *testing.T) {
 func TestAngle3_ToCartesianVec3(t *testing.T) {
 	tests := []struct {
 		name     string
-		angle    Angle3
-		expected Vec3
+		angle    blockworld.Angle3
+		expected blockworld.Vec3
 	}{
 		{
 			name:     "zero angles",
-			angle:    Angle3{Theta: 0, Phi: 0},
-			expected: Vec3{X: 0, Y: 0, Z: 1},
+			angle:    blockworld.Angle3{Theta: 0, Phi: 0},
+			expected: blockworld.Vec3{X: 0, Y: 0, Z: 1},
 		},
 		{
 			name:     "90 degrees polar",
-			angle:    Angle3{Theta: 90, Phi: 0},
-			expected: Vec3{X: 1, Y: 0, Z: 0},
+			angle:    blockworld.Angle3{Theta: 90, Phi: 0},
+			expected: blockworld.Vec3{X: 1, Y: 0, Z: 0},
 		},
 		{
 			name:     "45 degrees polar",
-			angle:    Angle3{Theta: 45, Phi: 0},
-			expected: Vec3{X: math.Sqrt2 / 2, Y: 0, Z: math.Sqrt2 / 2},
+			angle:    blockworld.Angle3{Theta: 45, Phi: 0},
+			expected: blockworld.Vec3{X: math.Sqrt2 / 2, Y: 0, Z: math.Sqrt2 / 2},
 		},
 		{
 			name:     "90 degrees azimuthal",
-			angle:    Angle3{Theta: 0, Phi: 90},
-			expected: Vec3{X: 0, Y: 0, Z: 1},
+			angle:    blockworld.Angle3{Theta: 0, Phi: 90},
+			expected: blockworld.Vec3{X: 0, Y: 0, Z: 1},
 		},
 		{
 			name:     "90 degrees polar 45 degrees azimuthal",
-			angle:    Angle3{Theta: 90, Phi: 45},
-			expected: Vec3{X: math.Sqrt2 / 2, Y: math.Sqrt2 / 2, Z: 0},
+			angle:    blockworld.Angle3{Theta: 90, Phi: 45},
+			expected: blockworld.Vec3{X: math.Sqrt2 / 2, Y: math.Sqrt2 / 2, Z: 0},
 		},
 		{
 			name:     "90 degrees polar and azimuthal",
-			angle:    Angle3{Theta: 90, Phi: 90},
-			expected: Vec3{X: 0, Y: 1, Z: 0},
+			angle:    blockworld.Angle3{Theta: 90, Phi: 90},
+			expected: blockworld.Vec3{X: 0, Y: 1, Z: 0},
 		},
 		{
 			name:     "90 degrees polar and 45 degrees azimuthal",
-			angle:    Angle3{Theta: 90, Phi: 45},
-			expected: Vec3{X: math.Sqrt2 / 2, Y: math.Sqrt(2) / 2, Z: 0},
+			angle:    blockworld.Angle3{Theta: 90, Phi: 45},
+			expected: blockworld.Vec3{X: math.Sqrt2 / 2, Y: math.Sqrt(2) / 2, Z: 0},
 		},
 		{
 			name:     "45 degrees polar and azimuthal",
-			angle:    Angle3{Theta: 45, Phi: 45},
-			expected: Vec3{X: 0.5, Y: 0.5, Z: math.Sqrt2 / 2},
+			angle:    blockworld.Angle3{Theta: 45, Phi: 45},
+			expected: blockworld.Vec3{X: 0.5, Y: 0.5, Z: math.Sqrt2 / 2},
 		},
 		{
 			name:     "180 degrees polar",
-			angle:    Angle3{Theta: 180, Phi: 0},
-			expected: Vec3{X: 0, Y: 0, Z: -1},
+			angle:    blockworld.Angle3{Theta: 180, Phi: 0},
+			expected: blockworld.Vec3{X: 0, Y: 0, Z: -1},
 		},
 	}
 
@@ -111,7 +114,27 @@ func TestAngle3_ToCartesianVec3(t *testing.T) {
 	}
 }
 
-func almostEqual(v1, v2 Vec3) bool {
+func almostEqual(v1, v2 blockworld.Vec3) bool {
 	const epsilon = 1e-9
 	return math.Abs(v1.X-v2.X) < epsilon && math.Abs(v1.Y-v2.Y) < epsilon && math.Abs(v1.Z-v2.Z) < epsilon
+}
+
+func BenchmarkMapIter(b *testing.B) {
+	maps := []string{"../../maps/DragonsReach.vxl", "../../maps/AttackonDeuces.vxl"}
+	for _, m := range maps {
+		b.Run(m, func(b *testing.B) {
+			world := blockworld.NewBlockworld()
+			err := maploader.LoadMap(m, world)
+			if err != nil {
+				panic(err)
+			}
+			count := 0
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for _, _ = range world.Blocks() {
+					count++
+				}
+			}
+		})
+	}
 }
