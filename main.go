@@ -38,6 +38,12 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	if w.GetKey(glfw.KeyW) == glfw.Press || w.GetKey(glfw.KeyW) == glfw.Repeat {
 		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.ToCartesianVec3(speed))
 	}
+	if w.GetKey(glfw.KeyQ) == glfw.Press || w.GetKey(glfw.KeyQ) == glfw.Repeat {
+		world.PlayerPos.Z += speed
+	}
+	if w.GetKey(glfw.KeyE) == glfw.Press || w.GetKey(glfw.KeyE) == glfw.Repeat {
+		world.PlayerPos.Z -= speed
+	}
 	if w.GetKey(glfw.KeyUp) == glfw.Press || w.GetKey(glfw.KeyUp) == glfw.Repeat {
 		world.PlayerDir.Theta += rotSpeed
 		world.PlayerDir = world.PlayerDir.ClampToView()
