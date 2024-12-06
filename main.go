@@ -11,6 +11,7 @@ import (
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/pudelkoM/go-render/pkg/blockworld"
+	"github.com/pudelkoM/go-render/pkg/maploader"
 )
 
 func init() {
@@ -66,10 +67,9 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 		xd := (-fovHDeg / 2) + float64(x)*degPerPixel
 		for y := 0; y < img.Rect.Dy(); y++ {
 			yd := (-fovVDeg / 2) + float64(y)*degPerPixel
-			rayVec := blockworld.Angle3{Theta: world.PlayerDir.Theta + yd, Phi: world.PlayerDir.Phi + xd}.ToCartesianVec3(0.25)
-			// rayVec := world.PlayerDir.RotateZ(xd).RotateY(yd).Normalize().Mul(0.25)
+			rayVec := blockworld.Angle3{Theta: world.PlayerDir.Theta + yd, Phi: world.PlayerDir.Phi + xd}.ToCartesianVec3(1)
 			newPos := world.PlayerPos
-			for i := 0; i < 100; i++ {
+			for i := 0; i < 150; i++ {
 				newPos = newPos.Add(rayVec)
 				n := newPos.ToPointTrunc()
 				b, ok := world.Get(n)
@@ -139,7 +139,11 @@ func main() {
 
 	// World setup
 	world := blockworld.NewBlockworld()
-	world.Randomize()
+	// err = maploader.LoadMap("./maps/AttackonDeuces.vxl", world)
+	err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	if err != nil {
+		panic(err)
+	}
 
 	var frameCount int64 = 0
 	var lastFrame = time.Now()

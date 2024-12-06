@@ -171,8 +171,8 @@ func NewBlockworld() *Blockworld {
 	return &Blockworld{
 		blocks:      make(map[Point]Block),
 		BlockSizePx: blockSizePx,
-		PlayerPos:   Vec3{X: 0, Y: 0, Z: 3},
-		PlayerDir:   Angle3{Theta: 90, Phi: 0},
+		PlayerPos:   Vec3{X: 100, Y: 100, Z: 64},
+		PlayerDir:   Angle3{Theta: 90, Phi: 45},
 	}
 }
 
