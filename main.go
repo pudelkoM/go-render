@@ -5,8 +5,6 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
-	"math"
-	"math/rand"
 	"runtime"
 	"time"
 
@@ -21,38 +19,35 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func drawRandomPix(img *image.RGBA, _ *blockworld.Blockworld, _ int64) {
-	for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
-		img.Set(x, x, color.White)
-	}
-
-	rx := rand.Intn(img.Rect.Max.X)
-	ry := rand.Intn(img.Rect.Max.Y)
-	c := color.NRGBA{
-		uint8(rand.Intn(256)),
-		uint8(rand.Intn(256)),
-		uint8(rand.Intn(256)),
-		255,
-	}
-	img.Set(rx, ry, c)
-}
-
 func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	if w.GetKey(glfw.KeyEscape) == glfw.Press {
 		w.SetShouldClose(true)
 	}
 	const speed = 0.1
+	const rotSpeed = 3.
 	if w.GetKey(glfw.KeyA) == glfw.Press || w.GetKey(glfw.KeyA) == glfw.Repeat {
-		world.PlayerPos.X -= speed
-	}
-	if w.GetKey(glfw.KeyS) == glfw.Press || w.GetKey(glfw.KeyS) == glfw.Repeat {
 		world.PlayerPos.Y -= speed
 	}
+	if w.GetKey(glfw.KeyS) == glfw.Press || w.GetKey(glfw.KeyS) == glfw.Repeat {
+		world.PlayerPos = world.PlayerPos.Sub(world.PlayerDir.Mul(speed))
+	}
 	if w.GetKey(glfw.KeyD) == glfw.Press || w.GetKey(glfw.KeyD) == glfw.Repeat {
-		world.PlayerPos.X += speed
+		world.PlayerPos.Y += speed
 	}
 	if w.GetKey(glfw.KeyW) == glfw.Press || w.GetKey(glfw.KeyW) == glfw.Repeat {
-		world.PlayerPos.Y += speed
+		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.Mul(speed))
+	}
+	if w.GetKey(glfw.KeyUp) == glfw.Press || w.GetKey(glfw.KeyUp) == glfw.Repeat {
+		world.PlayerDir = world.PlayerDir.RotateY(rotSpeed).Normalize()
+	}
+	if w.GetKey(glfw.KeyDown) == glfw.Press || w.GetKey(glfw.KeyDown) == glfw.Repeat {
+		world.PlayerDir = world.PlayerDir.RotateY(-rotSpeed).Normalize()
+	}
+	if w.GetKey(glfw.KeyLeft) == glfw.Press || w.GetKey(glfw.KeyLeft) == glfw.Repeat {
+		world.PlayerDir = world.PlayerDir.RotateZ(-rotSpeed).Normalize()
+	}
+	if w.GetKey(glfw.KeyRight) == glfw.Press || w.GetKey(glfw.KeyRight) == glfw.Repeat {
+		world.PlayerDir = world.PlayerDir.RotateZ(rotSpeed).Normalize()
 	}
 }
 
@@ -60,39 +55,28 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 	// clear image
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.ZP, draw.Src)
 
-	pos := world.PlayerPos
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
-	// fovHBlocks := 30.
-	fovHBlocks := float64(img.Rect.Dx()) / float64(world.BlockSizePx)
-	fovVBlocks := float64(fovHBlocks) / imgRatio
-	// fmt.Println("fovHBlocks", fovHBlocks, "fovVBlocks", fovVBlocks)
+	fovHDeg := 95.
+	fovVDeg := fovHDeg / imgRatio
+	degPerPixel := fovHDeg / float64(img.Rect.Dx())
 
-	_, fracX := math.Modf(pos.X)
-	_, fracY := math.Modf(pos.Y)
-	subX := int(math.Round(fracX * float64(world.BlockSizePx)))
-	subY := int(math.Round(fracY * float64(world.BlockSizePx)))
-
-	// if frameCount%60 == 0 {
-	// 	fmt.Println("fracX", fracX, "fracY", fracY, "subX", subX, "subY", subY)
-	// }
-
-	for x := 0; x < int(fovVBlocks); x++ {
-		for y := 0; y < int(fovHBlocks); y++ {
-			z := 0
-			p := blockworld.Point{X: x, Y: y, Z: z}
-			t := blockworld.PointFromVec(pos).Add(p)
-			b, ok := world.Get(t)
-			if !ok {
-				continue
+	for x := 0; x < img.Rect.Dx(); x++ {
+		xd := (-fovHDeg / 2) + float64(x)*degPerPixel
+		for y := 0; y < img.Rect.Dy(); y++ {
+			yd := (-fovVDeg / 2) + float64(y)*degPerPixel
+			rayVec := world.PlayerDir.RotateZ(xd).RotateY(yd).Normalize().Mul(0.25)
+			newPos := world.PlayerPos
+			for i := 0; i < 100; i++ {
+				newPos = newPos.Add(rayVec)
+				n := newPos.ToPointTrunc()
+				b, ok := world.Get(n)
+				if !ok {
+					continue
+				}
+				// fmt.Println("found block at ", n, " color ", b.Color)
+				img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+				break
 			}
-
-			r := image.Rect(
-				x*world.BlockSizePx-subX,
-				y*world.BlockSizePx-subY,
-				(x+1)*world.BlockSizePx-subX,
-				(y+1)*world.BlockSizePx-subY,
-			)
-			draw.Draw(img, r, image.NewUniform(b.Color), image.ZP, draw.Src)
 		}
 	}
 }
@@ -120,24 +104,6 @@ func main() {
 		panic(err)
 	}
 
-	// window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-	// 	if key == glfw.KeyEscape && action == glfw.Press {
-	// 		w.SetShouldClose(true)
-	// 	}
-	// 	if key == glfw.KeyA && (action == glfw.Press || action == glfw.Repeat) {
-	// 		fmt.Println("A")
-	// 	}
-	// 	if key == glfw.KeyS && (action == glfw.Press || action == glfw.Repeat) {
-	// 		fmt.Println("S")
-	// 	}
-	// 	if key == glfw.KeyD && (action == glfw.Press || action == glfw.Repeat) {
-	// 		fmt.Println("D")
-	// 	}
-	// 	if key == glfw.KeyW && (action == glfw.Press || action == glfw.Repeat) {
-	// 		fmt.Println("W")
-	// 	}
-	// })
-
 	var texture uint32
 	{
 		gl.GenTextures(1, &texture)
@@ -161,12 +127,14 @@ func main() {
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 	}
 
-	// World setup
+	const renderScale = 8
 	var w, h = window.GetFramebufferSize()
-
+	w /= renderScale
+	h /= renderScale
 	var img = image.NewRGBA(image.Rect(0, 0, w, h))
 	fmt.Println("frame size", img.Rect)
 
+	// World setup
 	world := blockworld.NewBlockworld()
 	world.Randomize()
 
@@ -180,7 +148,7 @@ func main() {
 		gl.BindTexture(gl.TEXTURE_2D, texture)
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(w), int32(h), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
 
-		gl.BlitFramebuffer(0, 0, int32(w), int32(h), 0, 0, int32(w), int32(h), gl.COLOR_BUFFER_BIT, gl.LINEAR)
+		gl.BlitFramebuffer(0, 0, int32(w), int32(h), 0, 0, int32(w)*renderScale, int32(h)*renderScale, gl.COLOR_BUFFER_BIT, gl.NEAREST)
 
 		window.SwapBuffers()
 		glfw.PollEvents()
@@ -188,7 +156,8 @@ func main() {
 		frameCount++
 		took := time.Since(lastFrame)
 		if frameCount%60 == 0 {
-			fmt.Println("Frametime", took)
+			fmt.Println("Frametime", took, "FPS", 1/took.Seconds())
+			fmt.Println("PlayerPos", world.PlayerPos, "PlayerDir", world.PlayerDir)
 		}
 		lastFrame = time.Now()
 	}

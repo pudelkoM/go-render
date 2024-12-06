@@ -41,11 +41,80 @@ func (v Vec3) Add(v2 Vec3) Vec3 {
 	}
 }
 
-func NearestPointFromVec(pos Vec3) Point {
+func (v Vec3) Sub(v2 Vec3) Vec3 {
+	return Vec3{
+		X: v.X - v2.X,
+		Y: v.Y - v2.Y,
+		Z: v.Z - v2.Z,
+	}
+}
+
+func (v Vec3) Mul(s float64) Vec3 {
+	return Vec3{
+		X: v.X * s,
+		Y: v.Y * s,
+		Z: v.Z * s,
+	}
+}
+
+// RotateX rotates the vector around the X axis.
+// Positive angle is counter-clockwise. Angle is in degrees.
+func (v Vec3) RotateX(angle float64) Vec3 {
+	rad := angle * math.Pi / 180
+	sin, cos := math.Sincos(rad)
+	return Vec3{
+		X: v.X,
+		Y: v.Y*cos - v.Z*sin,
+		Z: v.Y*sin + v.Z*cos,
+	}
+}
+
+// RotateY rotates the vector around the Y axis.
+// Positive angle is counter-clockwise. Angle is in degrees.
+func (v Vec3) RotateY(angle float64) Vec3 {
+	rad := angle * math.Pi / 180
+	sin, cos := math.Sincos(rad)
+	return Vec3{
+		X: v.X*cos + v.Z*sin,
+		Y: v.Y,
+		Z: -v.X*sin + v.Z*cos,
+	}
+}
+
+// RotateZ rotates the vector around the Z axis.
+// Positive angle is counter-clockwise. Angle is in degrees.
+func (v Vec3) RotateZ(angle float64) Vec3 {
+	rad := angle * math.Pi / 180
+	sin, cos := math.Sincos(rad)
+	return Vec3{
+		X: v.X*cos - v.Y*sin,
+		Y: v.X*sin + v.Y*cos,
+		Z: v.Z,
+	}
+}
+
+func (v Vec3) Normalize() Vec3 {
+	mag := math.Sqrt(v.X*v.X + v.Y*v.Y + v.Z*v.Z)
+	return Vec3{
+		X: v.X / mag,
+		Y: v.Y / mag,
+		Z: v.Z / mag,
+	}
+}
+
+func (v Vec3) ToNearestPoint() Point {
 	return Point{
-		X: int(math.Round(pos.X)),
-		Y: int(math.Round(pos.Y)),
-		Z: int(math.Round(pos.Z)),
+		X: int(math.Round(v.X)),
+		Y: int(math.Round(v.Y)),
+		Z: int(math.Round(v.Z)),
+	}
+}
+
+func (v Vec3) ToPointTrunc() Point {
+	return Point{
+		X: int(v.X),
+		Y: int(v.Y),
+		Z: int(v.Z),
 	}
 }
 
@@ -65,12 +134,15 @@ type Blockworld struct {
 	blocks      map[Point]Block
 	BlockSizePx int
 	PlayerPos   Vec3
+	PlayerDir   Vec3
 }
 
 func NewBlockworld() *Blockworld {
 	return &Blockworld{
 		blocks:      make(map[Point]Block),
 		BlockSizePx: blockSizePx,
+		PlayerPos:   Vec3{X: 0, Y: 0, Z: 0},
+		PlayerDir:   Vec3{X: 1, Y: 0, Z: 0},
 	}
 }
 
@@ -86,9 +158,10 @@ func (bw *Blockworld) Randomize() {
 		color.NRGBA{0, 255, 255, 255}, // cyan
 	}
 
-	for x := 0; x < worldSize; x++ {
-		for y := 0; y < worldSize; y++ {
-			for z := 0; z < 1; z++ {
+	// Generate a wall of blocks, 5 high, 1 wide, 10 long
+	for x := 4; x < 5; x++ {
+		for y := -5; y < 5; y++ {
+			for z := 0; z < 5; z++ {
 				bw.blocks[Point{x, y, z}] = Block{colors[rand.Intn(len(colors))]}
 			}
 		}
