@@ -15,6 +15,7 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/pudelkoM/go-render/pkg/blockworld"
 	"github.com/pudelkoM/go-render/pkg/maploader"
+	"github.com/pudelkoM/go-render/pkg/utils"
 )
 
 func init() {
@@ -80,14 +81,30 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 			rayVec := viewVec.RotateY(yd).RotateZ(xd)
 			rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
 			newPos := world.PlayerPos
+			isReflectionRay := false
 			for i := 0; i < 300; i++ {
 				newPos = newPos.Add(rayVec)
 				n := newPos.ToPointTrunc()
 				b, ok := world.Get(n)
 				if !ok {
+					// Advance vector to next full block?
 					continue
 				}
-				// fmt.Println("found block at ", n, " color ", b.Color)
+				if b.Reflective {
+					// Reflect ray by inverting Z component
+					isReflectionRay = true
+					rayVec = blockworld.Vec3{X: rayVec.X, Y: rayVec.Y, Z: -rayVec.Z}
+					newPos = newPos.Add(rayVec)
+					img.Set(x, img.Rect.Dy()-y, b.Color)
+					continue
+				}
+				if isReflectionRay {
+					c1 := img.At(x, img.Rect.Dy()-y).(color.RGBA) // Color of the block we reflected off
+					c2 := b.Color.(color.NRGBA)
+					c := utils.CompositeNRGBA(c1, c2)
+					img.Set(x, img.Rect.Dy()-y, c)
+					break
+				}
 				img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
 				break
 			}

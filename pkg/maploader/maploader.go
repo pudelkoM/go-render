@@ -39,7 +39,8 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 						A: uint8(c & 0xFF),
 					}
 					world.Set(x, y, z, blockworld.Block{
-						Color: col,
+						Color:      col,
+						Reflective: z == 0,
 					})
 				}
 			}

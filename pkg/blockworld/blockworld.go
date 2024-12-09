@@ -221,8 +221,9 @@ func PointFromVec(pos Vec3) Point {
 }
 
 type Block struct {
-	Color color.Color
-	isSet bool // a zero-value block is not set, i.e. air
+	Color      color.Color
+	isSet      bool // a zero-value block is not set, i.e. air
+	Reflective bool
 }
 
 type Blockworld struct {
