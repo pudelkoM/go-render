@@ -1,6 +1,7 @@
 package blockworld
 
 import (
+	"fmt"
 	"image/color"
 	"math"
 	"math/rand"
@@ -29,10 +30,6 @@ func (p Point) Sub(p2 Point) Point {
 	}
 }
 
-type Vec3 struct {
-	X, Y, Z float64
-}
-
 // Angle3 is a 3D angle in degrees.
 type Angle3 struct {
 	Theta float64 // polar, "up-down"
@@ -50,6 +47,25 @@ func (a Angle3) ClampToView() Angle3 {
 }
 
 func (a Angle3) Normalize() Angle3 {
+	// Normalized theta angles:
+	// 181 -> 179
+	// 360 -> 0
+	// 359 -> 1
+	// 270 -> 90
+	for a.Theta > 180 {
+		a.Theta = 180 - math.Mod(a.Theta, 180)
+		a.Phi += 180
+	}
+	for a.Theta < 0 {
+		a.Theta = 180 + math.Mod(a.Theta, 180)
+		a.Phi += 180
+	}
+	for a.Phi > 360 {
+		a.Phi -= 360
+	}
+	if a.Phi < 0 {
+		a.Phi += 360
+	}
 	return Angle3{
 		Theta: math.Mod(a.Theta, 360),
 		Phi:   math.Mod(a.Phi, 360),
@@ -87,6 +103,14 @@ func (a Angle3) ToCartesianVec3(r float64) Vec3 {
 	}
 }
 
+type Vec3 struct {
+	X, Y, Z float64
+}
+
+func (v Vec3) String() string {
+	return fmt.Sprintf("{X: %0.3f, Y: %0.3f, Z: %0.3f}", v.X, v.Y, v.Z)
+}
+
 func (v Vec3) Add(v2 Vec3) Vec3 {
 	return Vec3{
 		X: v.X + v2.X,
@@ -108,6 +132,22 @@ func (v Vec3) Mul(s float64) Vec3 {
 		X: v.X * s,
 		Y: v.Y * s,
 		Z: v.Z * s,
+	}
+}
+
+func (v Vec3) Rotate(x, y, z float64) Vec3 {
+	xRad := x * math.Pi / 180
+	yRad := y * math.Pi / 180
+	zRad := z * math.Pi / 180
+
+	sinX, cosX := math.Sincos(xRad)
+	sinY, cosY := math.Sincos(yRad)
+	sinZ, cosZ := math.Sincos(zRad)
+
+	return Vec3{
+		X: v.X*cosY*cosZ - v.Y*cosY*sinZ + v.Z*sinY,
+		Y: v.X*(sinX*sinY*cosZ+cosX*sinZ) - v.Y*(sinX*sinY*sinZ-cosX*cosZ) - v.Z*sinX*cosY,
+		Z: v.X*(-cosX*sinY*cosZ-sinX*sinZ) + v.Y*(cosX*sinY*sinZ+sinX*cosZ) + v.Z*cosX*cosY,
 	}
 }
 
