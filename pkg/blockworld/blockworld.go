@@ -222,10 +222,12 @@ func PointFromVec(pos Vec3) Point {
 
 type Block struct {
 	Color color.Color
+	isSet bool // a zero-value block is not set, i.e. air
 }
 
 type Blockworld struct {
-	blocks      map[Point]Block
+	blocks      []Block
+	x, y, z     int
 	BlockSizePx int
 	PlayerPos   Vec3
 	PlayerDir   Angle3
@@ -233,7 +235,7 @@ type Blockworld struct {
 
 func NewBlockworld() *Blockworld {
 	return &Blockworld{
-		blocks:      make(map[Point]Block),
+		blocks:      make([]Block, 0),
 		BlockSizePx: blockSizePx,
 		PlayerPos:   Vec3{X: 170, Y: 170, Z: 64},
 		PlayerDir:   Angle3{Theta: 90, Phi: 45},
@@ -256,21 +258,43 @@ func (bw *Blockworld) Randomize() {
 	for x := 4; x < 5; x++ {
 		for y := -5; y < 5; y++ {
 			for z := 0; z < 5; z++ {
-				bw.blocks[Point{x, y, z}] = Block{colors[rand.Intn(len(colors))]}
+				bw.Set(x, y, z, Block{Color: colors[rand.Intn(len(colors))]})
 			}
 		}
 	}
 }
 
-func (bw *Blockworld) Blocks() map[Point]Block {
+func (bw *Blockworld) SetSize(x, y, z int) {
+	bw.x = x
+	bw.y = y
+	bw.z = z
+	bw.blocks = make([]Block, x*y*z)
+}
+
+func (bw *Blockworld) Blocks() []Block {
 	return bw.blocks
 }
 
 func (bw *Blockworld) Get(p Point) (*Block, bool) {
-	b, ok := bw.blocks[p]
-	return &b, ok
+	if (p.X < 0 || p.X >= bw.x) || (p.Y < 0 || p.Y >= bw.y) || (p.Z < 0 || p.Z >= bw.z) {
+		return nil, false
+	}
+	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
+	return b, b.isSet
+}
+
+func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
+	if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
+		return nil, false
+	}
+	b := &bw.blocks[x+y*bw.x+z*bw.x*bw.y]
+	return b, b.isSet
 }
 
 func (bw *Blockworld) Set(x, y, z int, b Block) {
-	bw.blocks[Point{x, y, z}] = b
+	if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
+		return
+	}
+	b.isSet = true
+	bw.blocks[x+y*bw.x+z*bw.x*bw.y] = b
 }

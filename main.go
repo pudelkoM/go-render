@@ -5,6 +5,9 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"runtime"
 	"time"
 
@@ -69,15 +72,15 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 	fovVDeg := fovHDeg * imgRatio
 	degPerPixel := fovHDeg / float64(img.Rect.Dx())
 
-	for x := 0; x < img.Rect.Dx(); x++ {
-		xd := (-fovHDeg / 2) + float64(x)*degPerPixel
-		for y := 0; y < img.Rect.Dy(); y++ {
-			yd := (-fovVDeg / 2) + float64(y)*degPerPixel
+	for y := 0; y < img.Rect.Dy(); y++ {
+		yd := (-fovVDeg / 2) + float64(y)*degPerPixel
+		for x := 0; x < img.Rect.Dx(); x++ {
+			xd := (-fovHDeg / 2) + float64(x)*degPerPixel
 			viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
 			rayVec := viewVec.RotateY(yd).RotateZ(xd)
 			rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
 			newPos := world.PlayerPos
-			for i := 0; i < 150; i++ {
+			for i := 0; i < 300; i++ {
 				newPos = newPos.Add(rayVec)
 				n := newPos.ToPointTrunc()
 				b, ok := world.Get(n)
@@ -93,6 +96,10 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 }
 
 func main() {
+	go func() {
+		log.Fatal(http.ListenAndServe(":6060", nil))
+	}()
+
 	err := glfw.Init()
 	if err != nil {
 		panic(err)
@@ -138,7 +145,7 @@ func main() {
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 	}
 
-	const renderScale = 16
+	const renderScale = 8
 	var w, h = window.GetFramebufferSize()
 	w /= renderScale
 	h /= renderScale
@@ -152,8 +159,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	world.PlayerPos = blockworld.Vec3{X: 133, Y: 232, Z: 51}
-	world.PlayerDir = blockworld.Angle3{Theta: 99, Phi: 27}
+	world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
+	world.PlayerDir = blockworld.Angle3{Theta: 0, Phi: 0}
+
+	// Starting window.
+	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
+	// world.PlayerDir = blockworld.Angle3{Theta: 90, Phi: 0}
 
 	var frameCount int64 = 0
 	var lastFrame = time.Now()

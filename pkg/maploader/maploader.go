@@ -24,6 +24,8 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 		return err
 	}
 
+	world.SetSize(512, 512, 64)
+
 	for x := 0; x < len(mapData); x++ {
 		for y := 0; y < len(mapData[x]); y++ {
 			for z := 0; z < len(mapData[x][y]); z++ {
