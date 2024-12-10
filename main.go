@@ -82,8 +82,9 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 			rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
 			newPos := world.PlayerPos
 			isReflectionRay := false
-			for i := 0; i < 300; i++ {
-				newPos = newPos.Add(rayVec)
+			for i := 0; i < 250; i++ {
+				// newPos = newPos.Add(rayVec)
+				newPos = newPos.AdvanceToNextBlockBoundary(rayVec)
 				n := newPos.ToPointTrunc()
 				b, ok := world.Get(n)
 				if !ok {
@@ -101,6 +102,7 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 				if isReflectionRay {
 					c1 := img.At(x, img.Rect.Dy()-y).(color.RGBA) // Color of the block we reflected off
 					c2 := b.Color.(color.NRGBA)
+					c1.A = 200
 					c := utils.CompositeNRGBA(c1, c2)
 					img.Set(x, img.Rect.Dy()-y, c)
 					break
@@ -176,8 +178,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
-	world.PlayerDir = blockworld.Angle3{Theta: 0, Phi: 0}
+	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
+	// world.PlayerDir = blockworld.Angle3{Theta: 0, Phi: 0}
+
+	// Side view.
+	world.PlayerPos = blockworld.Vec3{X: 190, Y: 310, Z: 33}
+	world.PlayerDir = blockworld.Angle3{Theta: 95, Phi: 325}
 
 	// Starting window.
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}

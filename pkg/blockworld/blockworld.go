@@ -212,11 +212,46 @@ func (v Vec3) ToPointTrunc() Point {
 	}
 }
 
-func PointFromVec(pos Vec3) Point {
-	return Point{
-		X: int(pos.X),
-		Y: int(pos.Y),
-		Z: int(pos.Z),
+func SignAsFloat(f float64) float64 {
+	return math.Float64frombits(math.Float64bits(f)&(1<<63) | 0x3FF0000000000000)
+}
+
+func (v Vec3) AdvanceToNextBlockBoundary(dir Vec3) Vec3 {
+	fx := 100.
+	if dir.X > 0 {
+		dx := math.Floor(v.X+1) - v.X
+		fx = dx / dir.X
+	} else if dir.X < 0 {
+		dx := math.Ceil(v.X-1) - v.X
+		fx = dx / dir.X
+	}
+	fy := 100.
+	if dir.Y > 0 {
+		dy := math.Floor(v.Y+1) - v.Y
+		fy = dy / dir.Y
+	} else if dir.Y < 0 {
+		dy := math.Ceil(v.Y-1) - v.Y
+		fy = dy / dir.Y
+	}
+	fz := 100.
+	if dir.Z > 0 {
+		dz := math.Floor(v.Z+1) - v.Z
+		fz = dz / dir.Z
+	} else if dir.Z < 0 {
+		dz := math.Ceil(v.Z-1) - v.Z
+		fz = dz / dir.Z
+	}
+
+	f := 1.0001
+
+	if fx < fy && fx < fz {
+		return v.Add(dir.Mul(fx * f))
+	} else if fy < fx && fy < fz {
+		return v.Add(dir.Mul(fy * f))
+	} else if fz < fx && fz < fy {
+		return v.Add(dir.Mul(fz * f))
+	} else {
+		return v.Add(dir)
 	}
 }
 
