@@ -33,10 +33,12 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 					var col color.Color = color.Black
 					c := colorData[x][y][z]
 					col = color.NRGBA{
-						R: uint8((c >> 24) & 0xFF),
+						B: uint8((c >> 24) & 0xFF),
 						G: uint8((c >> 16) & 0xFF),
-						B: uint8((c >> 8) & 0xFF),
-						A: uint8(c & 0xFF),
+						R: uint8((c >> 8) & 0xFF),
+						// Alpha is used for shading. 0x00 is dark. 0x80 is full brightness.
+						A: uint8(c&0xFF) + 128,
+						// A: uint8(c & 0xFF),
 					}
 					world.Set(x, y, z, blockworld.Block{
 						Color:      col,
@@ -98,7 +100,7 @@ func loadMap(v []byte, length int) error {
 					if len(color) < 4 {
 						return errors.New("insufficient color data")
 					}
-					c := binary.LittleEndian.Uint32(color)
+					c := binary.BigEndian.Uint32(color)
 					if err := setColor(x, y, z, c); err != nil {
 						return err
 					}
@@ -126,7 +128,7 @@ func loadMap(v []byte, length int) error {
 					if len(color) < 4 {
 						return errors.New("insufficient color data")
 					}
-					c := binary.LittleEndian.Uint32(color)
+					c := binary.BigEndian.Uint32(color)
 					if err := setColor(x, y, z, c); err != nil {
 						return err
 					}
