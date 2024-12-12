@@ -125,7 +125,7 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 				}
 				if isReflectionRay {
 					c1 := img.At(x, img.Rect.Dy()-y).(color.RGBA) // Color of the block we reflected off
-					c2 := b.Color.(color.NRGBA)
+					c2 := b.Color
 					c1.A = 200
 					c := utils.CompositeNRGBA(c1, c2)
 					img.Set(x, img.Rect.Dy()-y, c)

@@ -3,8 +3,10 @@ package maploader
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"image/color"
 	"os"
+	"time"
 
 	"github.com/pudelkoM/go-render/pkg/blockworld"
 )
@@ -30,9 +32,8 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 		for y := 0; y < len(mapData[x]); y++ {
 			for z := 0; z < len(mapData[x][y]); z++ {
 				if mapData[x][y][z] == 1 {
-					var col color.Color = color.Black
 					c := colorData[x][y][z]
-					col = color.NRGBA{
+					col := color.NRGBA{
 						B: uint8((c >> 24) & 0xFF),
 						G: uint8((c >> 16) & 0xFF),
 						R: uint8((c >> 8) & 0xFF),
@@ -48,6 +49,11 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 			}
 		}
 	}
+
+	t0 := time.Now()
+	world.ComputeNearestBlocks()
+	dt := time.Since(t0)
+	fmt.Println("ComputeNearestBlocks took", dt)
 	return nil
 }
 
