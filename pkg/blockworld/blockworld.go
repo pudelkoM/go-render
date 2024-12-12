@@ -256,9 +256,10 @@ func (v Vec3) AdvanceToNextBlockBoundary(dir Vec3) Vec3 {
 }
 
 type Block struct {
-	Color      color.Color
-	isSet      bool // a zero-value block is not set, i.e. air
-	Reflective bool
+	Color                  color.NRGBA
+	IsSet                  bool // a zero-value block is not set, i.e. air
+	Reflective             bool
+	DistanceToNearestBlock int16
 }
 
 type Blockworld struct {
@@ -280,8 +281,8 @@ func NewBlockworld() *Blockworld {
 
 func (bw *Blockworld) Randomize() {
 	const worldSize = 40
-	colors := []color.Color{
-		color.White,
+	colors := []color.NRGBA{
+		color.NRGBA{0, 0, 0, 0},       // white
 		color.NRGBA{255, 0, 0, 255},   // red
 		color.NRGBA{0, 255, 0, 255},   // green
 		color.NRGBA{0, 0, 255, 255},   // blue
@@ -316,7 +317,7 @@ func (bw *Blockworld) Get(p Point) (*Block, bool) {
 		return nil, false
 	}
 	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
-	return b, b.isSet
+	return b, b.IsSet
 }
 
 func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
@@ -324,13 +325,13 @@ func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
 		return nil, false
 	}
 	b := &bw.blocks[x+y*bw.x+z*bw.x*bw.y]
-	return b, b.isSet
+	return b, b.IsSet
 }
 
 func (bw *Blockworld) Set(x, y, z int, b Block) {
 	if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
 		return
 	}
-	b.isSet = true
+	b.IsSet = true
 	bw.blocks[x+y*bw.x+z*bw.x*bw.y] = b
 }
