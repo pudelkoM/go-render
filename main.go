@@ -6,9 +6,13 @@ import (
 	"image/color"
 	"image/draw"
 	"log"
+	"math"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"runtime"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-gl/gl/all-core/gl"
@@ -23,6 +27,10 @@ func init() {
 	// See documentation for functions that are only allowed to be called from the main thread.
 	runtime.LockOSThread()
 }
+
+var (
+	mapIndex = 0
+)
 
 func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	if w.GetKey(glfw.KeyEscape) == glfw.Press {
@@ -61,6 +69,22 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	}
 	if w.GetKey(glfw.KeyRight) == glfw.Press || w.GetKey(glfw.KeyRight) == glfw.Repeat {
 		world.PlayerDir = world.PlayerDir.RotatePhi(rotSpeed)
+	}
+	if w.GetKey(glfw.KeyN) == glfw.Press {
+		dir := "./maps/"
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			log.Fatal(err)
+		}
+		files = slices.DeleteFunc(files, func(f os.DirEntry) bool {
+			return !strings.HasSuffix(f.Name(), ".vxl")
+		})
+		mapIndex = ((mapIndex + 1) % len(files))
+		fmt.Println("loading map", files[mapIndex].Name())
+		err = maploader.LoadMap(dir+files[mapIndex].Name(), world)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
