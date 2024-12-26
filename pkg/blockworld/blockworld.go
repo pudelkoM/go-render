@@ -5,6 +5,8 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
+
+	"github.com/pudelkoM/go-render/pkg/utils"
 )
 
 const blockSizePx = 25
@@ -28,6 +30,18 @@ func (p Point) Sub(p2 Point) Point {
 		Y: p.Y - p2.Y,
 		Z: p.Z - p2.Z,
 	}
+}
+
+func (p Point) ToVec3() Vec3 {
+	return Vec3{
+		X: float64(p.X),
+		Y: float64(p.Y),
+		Z: float64(p.Z),
+	}
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("{X: %d, Y: %d, Z: %d}", p.X, p.Y, p.Z)
 }
 
 // Angle3 is a 3D angle in degrees.
@@ -133,6 +147,10 @@ func (v Vec3) Mul(s float64) Vec3 {
 		Y: v.Y * s,
 		Z: v.Z * s,
 	}
+}
+
+func (v Vec3) Length() float64 {
+	return math.Sqrt(v.X*v.X + v.Y*v.Y + v.Z*v.Z)
 }
 
 func (v Vec3) Rotate(x, y, z float64) Vec3 {
@@ -255,11 +273,48 @@ func (v Vec3) AdvanceToNextBlockBoundary(dir Vec3) Vec3 {
 	}
 }
 
+const (
+	BLOCK_FACE_FRONT = iota
+	BLOCK_FACE_BACK
+	BLOCK_FACE_LEFT
+	BLOCK_FACE_RIGHT
+	BLOCK_FACE_TOP
+	BLOCK_FACE_BOTTOM
+)
+
+func epsilonEqual(a, b float64) bool {
+	return math.Abs(a-b) < 1e-3
+}
+
+func GetBlockFace(pos Vec3, block Point) int {
+	if epsilonEqual(pos.Z, float64(block.Z)) {
+		return BLOCK_FACE_BOTTOM
+	}
+	if epsilonEqual(pos.Z, float64(block.Z+1)) {
+		return BLOCK_FACE_TOP
+	}
+	if epsilonEqual(pos.X, float64(block.X)) {
+		return BLOCK_FACE_LEFT
+	}
+	if epsilonEqual(pos.X, float64(block.X+1)) {
+		return BLOCK_FACE_RIGHT
+	}
+	if epsilonEqual(pos.Y, float64(block.Y)) {
+		return BLOCK_FACE_BACK
+	}
+	if epsilonEqual(pos.Y, float64(block.Y+1)) {
+		return BLOCK_FACE_FRONT
+	}
+
+	return -1
+}
+
 type Block struct {
 	Color                  color.NRGBA
 	IsSet                  bool // a zero-value block is not set, i.e. air
 	Reflective             bool
 	DistanceToNearestBlock int16
+	IsLightSource          bool
 }
 
 type Blockworld struct {
@@ -268,6 +323,7 @@ type Blockworld struct {
 	BlockSizePx int
 	PlayerPos   Vec3
 	PlayerDir   Angle3
+	Lights      []Point
 }
 
 func NewBlockworld() *Blockworld {
@@ -306,6 +362,7 @@ func (bw *Blockworld) SetSize(x, y, z int) {
 	bw.y = y
 	bw.z = z
 	bw.blocks = make([]Block, x*y*z)
+	bw.Lights = make([]Point, 0)
 }
 
 func (bw *Blockworld) Blocks() []Block {
@@ -334,4 +391,198 @@ func (bw *Blockworld) Set(x, y, z int, b Block) {
 	}
 	b.IsSet = true
 	bw.blocks[x+y*bw.x+z*bw.x*bw.y] = b
+}
+
+func (bw *Blockworld) CreateLightBlock(x, y, z int) {
+	b, _ := bw.GetRaw(x, y, z)
+	b.IsLightSource = true
+	b.IsSet = true
+	b.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+	bw.Lights = append(bw.Lights, Point{X: x, Y: y, Z: z})
+}
+
+func (bw *Blockworld) RayMarchSdf(start, dir Vec3) Vec3 {
+	// skipBlocks := []int16{}
+	// totalSkippedBlocks := 0
+
+	for {
+		bc, _ := bw.Get(start.ToPointTrunc())
+		if bc == nil || bc.IsSet || bc.IsLightSource {
+			break
+		}
+		if bc.DistanceToNearestBlock <= 3 {
+			start = start.AdvanceToNextBlockBoundary(dir)
+			continue
+		}
+		const sqrt3 = 1.73205080757
+		start = start.Add(dir.Mul(float64(bc.DistanceToNearestBlock-2) / sqrt3))
+		// totalSkippedBlocks += int(bc.DistanceToNearestBlock - 2)
+		// skipBlocks = append(skipBlocks, bc.DistanceToNearestBlock)
+	}
+
+	// if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
+	// 	fmt.Println("skip blocks", skipBlocks, "total skipped", totalSkippedBlocks)
+	// }
+	return start
+}
+
+func (bw *Blockworld) ComputeShadows() {
+	if len(bw.Lights) != 1 {
+		return
+	}
+	l := bw.Lights[0].ToVec3()
+	l = l.Add(Vec3{X: 0.5, Y: 0.5, Z: 0.5})
+
+	// lb, _ := bw.Get(l)
+	// lb.IsSet = false
+	// defer func() { lb.IsSet = true }()
+
+	for z := 0; z < bw.z; z++ {
+		for y := 0; y < bw.y; y++ {
+			for x := 0; x < bw.x; x++ {
+				b, _ := bw.GetRaw(x, y, z)
+				if !b.IsSet || b.IsLightSource {
+					continue
+				}
+
+				b.IsSet = false
+
+				c := Point{X: x, Y: y, Z: z}.ToVec3().Add(Vec3{X: 0.5, Y: 0.5, Z: 1})
+				// rayVec := l.ToVec3().Add(Vec3{X: 0.5, Y: 0.5, Z: 0.5}).Sub(c).Normalize()
+				// c := Point{X: x, Y: y, Z: z}.ToVec3()
+				rayVec := l.Sub(c).Normalize()
+				newPos := bw.RayMarchSdf(c, rayVec)
+
+				b2, _ := bw.Get(newPos.ToPointTrunc())
+				if b2 != nil && b2.IsLightSource {
+					// b.Color = color.NRGBA{R: 200, G: 0, B: 0, A: 255}
+				} else {
+					// Block is in shadow
+					b.Color = utils.ColorDarken(b.Color, 0.3)
+					// b.Color = color.NRGBA{R: 200, G: 0, B: 0, A: 255}
+				}
+
+				// if x == 247 && y == 256 && z == 27 {
+				// 	b.Color = color.NRGBA{R: 0, G: 0, B: 255, A: 255}
+				// 	fmt.Println("c", c)
+				// 	fmt.Println("rayVec", rayVec)
+				// 	fmt.Println("newPos", newPos.ToPointTrunc())
+				// 	fmt.Println("b2", b2)
+				// }
+
+				b.IsSet = true
+			}
+		}
+	}
+
+}
+
+func (world *Blockworld) ComputeNearestBlocks() {
+	// Fill X-Axis values.
+	for z := 0; z < world.z; z++ {
+		for y := 0; y < world.y; y++ {
+			d := int16(512)
+			for x := 0; x < world.x; x++ {
+				d++
+				b, _ := world.GetRaw(x, y, z)
+				if b.IsSet {
+					d = 0
+					continue
+				}
+				if b.DistanceToNearestBlock == 0 { // not visited before
+					b.DistanceToNearestBlock = d
+				} else {
+					d = min(b.DistanceToNearestBlock, d)
+					b.DistanceToNearestBlock = d
+				}
+			}
+			d = 512
+			for x := world.x - 1; x >= 0; x-- {
+				d++
+				b, _ := world.GetRaw(x, y, z)
+				if b.IsSet {
+					d = 0
+					continue
+				}
+				if b.DistanceToNearestBlock == 0 { // not visited before
+					b.DistanceToNearestBlock = d
+				} else {
+					d = min(b.DistanceToNearestBlock, d)
+					b.DistanceToNearestBlock = d
+				}
+			}
+		}
+	}
+
+	// Fill Y-Axis values.
+	for z := 0; z < world.z; z++ {
+		for x := 0; x < world.x; x++ {
+			d := int16(512)
+			for y := 0; y < world.y; y++ {
+				d++
+				b, _ := world.GetRaw(x, y, z)
+				if b.IsSet {
+					d = 0
+					continue
+				}
+				if b.DistanceToNearestBlock == 0 { // not visited before
+					b.DistanceToNearestBlock = d
+				} else {
+					d = min(b.DistanceToNearestBlock, d)
+					b.DistanceToNearestBlock = d
+				}
+			}
+			d = 512
+			for y := world.y - 1; y >= 0; y-- {
+				d++
+				b, _ := world.GetRaw(x, y, z)
+				if b.IsSet {
+					d = 0
+					continue
+				}
+				if b.DistanceToNearestBlock == 0 { // not visited before
+					b.DistanceToNearestBlock = d
+				} else {
+					d = min(b.DistanceToNearestBlock, d)
+					b.DistanceToNearestBlock = d
+				}
+			}
+		}
+	}
+
+	// Fill Z-Axis values.
+	for x := 0; x < world.x; x++ {
+		for y := 0; y < world.y; y++ {
+			d := int16(512)
+			for z := 0; z < world.z; z++ {
+				d++
+				b, _ := world.GetRaw(x, y, z)
+				if b.IsSet {
+					d = 0
+					continue
+				}
+				if b.DistanceToNearestBlock == 0 { // not visited before
+					b.DistanceToNearestBlock = d
+				} else {
+					d = min(b.DistanceToNearestBlock, d)
+					b.DistanceToNearestBlock = d
+				}
+			}
+			d = 512
+			for z := world.z - 1; z >= 0; z-- {
+				d++
+				b, _ := world.GetRaw(x, y, z)
+				if b.IsSet {
+					d = 0
+					continue
+				}
+				if b.DistanceToNearestBlock == 0 { // not visited before
+					b.DistanceToNearestBlock = d
+				} else {
+					d = min(b.DistanceToNearestBlock, d)
+					b.DistanceToNearestBlock = d
+				}
+			}
+		}
+	}
 }
