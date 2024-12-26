@@ -3,8 +3,10 @@ package maploader
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"image/color"
 	"os"
+	"time"
 
 	"github.com/pudelkoM/go-render/pkg/blockworld"
 )
@@ -36,8 +38,13 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 						G: uint8((c >> 16) & 0xFF),
 						R: uint8((c >> 8) & 0xFF),
 						// Alpha is used for shading. 0x00 is dark. 0x80 is full brightness.
-						A: uint8(c&0xFF) + 128,
+						// A: uint8(c&0xFF) + 128,
+						// A: uint8(c&0xFF) * 2,
 						// A: uint8(c & 0xFF),
+						// A: uint8(c&0xFF) + 64,
+						// A: uint8(c&0xFF) + 127,
+						A: uint8(c&0xFF) + 80,
+						// A: 255,
 					}
 					world.Set(x, y, z, blockworld.Block{
 						Color:      col,
@@ -47,7 +54,16 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 			}
 		}
 	}
+	world.CreateLightBlock(256, 280, 35)
+	t0 := time.Now()
+	world.ComputeShadows()
+	dt := time.Since(t0)
+	fmt.Println("ComputeShadows took", dt)
 
+	t0 = time.Now()
+	world.ComputeNearestBlocks()
+	dt = time.Since(t0)
+	fmt.Println("ComputeNearestBlocks took", dt)
 	return nil
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/pudelkoM/go-render/pkg/blockworld"
 	"github.com/pudelkoM/go-render/pkg/maploader"
+	"github.com/pudelkoM/go-render/pkg/utils"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
@@ -46,7 +47,7 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 		w.SetShouldClose(true)
 	}
 	const speed = 0.3
-	const rotSpeed = 3.
+	const rotSpeed = 2.
 	if w.GetKey(glfw.KeyA) == glfw.Press || w.GetKey(glfw.KeyA) == glfw.Repeat {
 		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.ResetTheta().RotatePhi(-90).ToCartesianVec3(speed))
 	}
@@ -162,6 +163,10 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 	// clear image
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
 
+	// depth buffer
+	depth := image.NewGray16(image.Rect(0, 0, img.Rect.Dx(), img.Rect.Dy()))
+	draw.Draw(depth, depth.Rect, image.NewUniform(color.Gray{Y: 0}), image.ZP, draw.Src)
+
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
 	fovHDeg := 55.
 	fovVDeg := fovHDeg * imgRatio
@@ -192,7 +197,61 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
 					newPos := world.PlayerPos
 
-					castRayAmatidesWoo(img, world, x, y, newPos, rayVec)
+					if false {
+						castRayAmatidesWoo(img, world, x, y, newPos, rayVec)
+					} else {
+						newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
+						{
+							n := newPos.ToPointTrunc()
+							b, _ := world.Get(n)
+							if b == nil {
+								// End of map reached, stop looking.
+								continue
+							}
+
+							face := blockworld.GetBlockFace(newPos, n)
+							orig := b.Color
+							switch face {
+							case blockworld.BLOCK_FACE_TOP:
+								rayVec.Z = -rayVec.Z
+								newPos.Z += 0.001
+							case blockworld.BLOCK_FACE_BOTTOM:
+								rayVec.Z = -rayVec.Z
+								newPos.Z -= 0.001
+							case blockworld.BLOCK_FACE_LEFT:
+								rayVec.X = -rayVec.X
+								newPos.X -= 0.001
+							case blockworld.BLOCK_FACE_RIGHT:
+								rayVec.X = -rayVec.X
+								newPos.X += 0.001
+							case blockworld.BLOCK_FACE_FRONT:
+								rayVec.Y = -rayVec.Y
+								newPos.Y += 0.001
+							case blockworld.BLOCK_FACE_BACK:
+								rayVec.Y = -rayVec.Y
+								newPos.Y -= 0.001
+							default:
+								img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+							}
+							// Reflected ray
+							newPos := world.RayMarchSdf(newPos, rayVec)
+							n = newPos.ToPointTrunc()
+							bRef, _ := world.Get(n)
+							if bRef != nil {
+								c := utils.CompositeNRGBA(orig, bRef.Color)
+								img.Set(x, img.Rect.Dy()-y, c) // flip y coord because ogl texture use bottom-left as origin
+							} else {
+								img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+							}
+
+							if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
+								fmt.Println("newPos", newPos, "n", n, "Face", face)
+								img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
+							}
+
+						}
+					}
+
 				}
 			}
 		}(t)
@@ -226,7 +285,7 @@ func main() {
 
 	glfw.WindowHint(glfw.DoubleBuffer, glfw.True)
 	glfw.WindowHint(glfw.FocusOnShow, glfw.True)
-	window, err := glfw.CreateWindow(640, 480, "My Window", nil, nil)
+	window, err := glfw.CreateWindow(1296, 729, "My Window", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -264,8 +323,30 @@ func main() {
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 	}
 
-	const renderScale = 8
+	var textureOverlay uint32
+	{
+		gl.GenTextures(1, &textureOverlay)
+
+		gl.BindTexture(gl.TEXTURE_2D, textureOverlay)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	}
+
+	var framebufferOverlay uint32
+	{
+		gl.GenFramebuffers(1, &framebufferOverlay)
+		gl.BindFramebuffer(gl.FRAMEBUFFER, framebufferOverlay)
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureOverlay, 0)
+
+		gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebufferOverlay)
+		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
+	}
+
+	const renderScale = 16
 	var w, h = window.GetFramebufferSize()
+	imgOverlay := image.NewRGBA(image.Rect(0, 0, w, h))
 	w /= renderScale
 	h /= renderScale
 	var img = image.NewRGBA(image.Rect(0, 0, w, h))
@@ -274,7 +355,8 @@ func main() {
 	// World setup
 	world := blockworld.NewBlockworld()
 	// err = maploader.LoadMap("./maps/AttackonDeuces.vxl", world)
-	err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	// err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	err = maploader.LoadMap("./maps/shigaichi4.vxl", world)
 	if err != nil {
 		panic(err)
 	}
@@ -288,6 +370,10 @@ func main() {
 	// Starting window.
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
 	// world.PlayerDir = blockworld.Angle3{Theta: 90, Phi: 0}
+
+	for i := imgOverlay.Rect.Min.X; i < imgOverlay.Rect.Max.X; i++ {
+		imgOverlay.Set(i, i, color.RGBA{R: 255, A: 255})
+	}
 
 	var frameCount int64 = 0
 	var lastFrame = time.Now()
