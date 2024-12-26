@@ -37,7 +37,7 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 		w.SetShouldClose(true)
 	}
 	const speed = 0.3
-	const rotSpeed = 3.
+	const rotSpeed = 2.
 	if w.GetKey(glfw.KeyA) == glfw.Press || w.GetKey(glfw.KeyA) == glfw.Repeat {
 		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.ResetTheta().RotatePhi(-90).ToCartesianVec3(speed))
 	}
@@ -88,9 +88,88 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	}
 }
 
+func amatidesWoo(newPos, rayVec blockworld.Vec3, world *blockworld.Blockworld) blockworld.Vec3 {
+
+	stepX := 0
+	tDeltaX := 0.0
+	tMaxX := 0.0
+	if rayVec.X > 0 {
+		stepX = 1
+		tDeltaX = 1 / rayVec.X
+		tMaxX = (math.Floor(newPos.X+1) - newPos.X) / rayVec.X
+	} else if rayVec.X < 0 {
+		stepX = -1
+		tDeltaX = 1 / -rayVec.X
+		tMaxX = (math.Ceil(newPos.X-1) - newPos.X) / rayVec.X
+	} else {
+		tMaxX = math.Inf(1)
+	}
+
+	stepY := 0
+	tDeltaY := 0.0
+	tMaxY := 0.0
+	if rayVec.Y > 0 {
+		stepY = 1
+		tDeltaY = 1 / rayVec.Y
+		tMaxY = (math.Floor(newPos.Y+1) - newPos.Y) / rayVec.Y
+	} else if rayVec.Y < 0 {
+		stepY = -1
+		tDeltaY = 1 / -rayVec.Y
+		tMaxY = (math.Ceil(newPos.Y-1) - newPos.Y) / rayVec.Y
+	} else {
+		tMaxY = math.Inf(1)
+	}
+
+	stepZ := 0
+	tDeltaZ := 0.0
+	tMaxZ := 0.0
+	if rayVec.Z > 0 {
+		stepZ = 1
+		tDeltaZ = 1 / rayVec.Z
+		tMaxZ = (math.Floor(newPos.Z+1) - newPos.Z) / rayVec.Z
+	} else if rayVec.Z < 0 {
+		stepZ = -1
+		tDeltaZ = 1 / -rayVec.Z
+		tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
+	} else {
+		tMaxZ = math.Inf(1)
+	}
+
+	for i := 0; i < 550; i++ {
+
+		if tMaxX < tMaxY && tMaxX < tMaxZ {
+			newPos.X += float64(stepX)
+			tMaxX += tDeltaX
+		} else if tMaxY < tMaxZ {
+			newPos.Y += float64(stepY)
+			tMaxY += tDeltaY
+		} else {
+			newPos.Z += float64(stepZ)
+			tMaxZ += tDeltaZ
+		}
+
+		n := newPos.ToPointTrunc()
+		b, ok := world.Get(n)
+
+		if b == nil {
+			// End of map reached, stop looking.
+			return newPos
+		}
+		if !ok {
+			// Advance vector to next full block?
+			continue
+		}
+	}
+	return newPos
+}
+
 func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) {
 	// clear image
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.ZP, draw.Src)
+
+	// depth buffer
+	depth := image.NewGray16(image.Rect(0, 0, img.Rect.Dx(), img.Rect.Dy()))
+	draw.Draw(depth, depth.Rect, image.NewUniform(color.Gray{Y: 0}), image.ZP, draw.Src)
 
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
 	fovHDeg := 55.
@@ -104,98 +183,90 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 			viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
 			rayVec := viewVec.RotateY(yd).RotateZ(xd)
 			rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
-			newPos := world.PlayerPos
-			isReflectionRay := false
+			// isReflectionRay := false
 
-			stepX := 0
-			tDeltaX := 0.0
-			tMaxX := 0.0
-			if rayVec.X > 0 {
-				stepX = 1
-				tDeltaX = 1 / rayVec.X
-				tMaxX = (math.Floor(newPos.X+1) - newPos.X) / rayVec.X
-			} else if rayVec.X < 0 {
-				stepX = -1
-				tDeltaX = 1 / -rayVec.X
-				tMaxX = (math.Ceil(newPos.X-1) - newPos.X) / rayVec.X
-			} else {
-				tMaxX = math.Inf(1)
-			}
+			newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
 
-			stepY := 0
-			tDeltaY := 0.0
-			tMaxY := 0.0
-			if rayVec.Y > 0 {
-				stepY = 1
-				tDeltaY = 1 / rayVec.Y
-				tMaxY = (math.Floor(newPos.Y+1) - newPos.Y) / rayVec.Y
-			} else if rayVec.Y < 0 {
-				stepY = -1
-				tDeltaY = 1 / -rayVec.Y
-				tMaxY = (math.Ceil(newPos.Y-1) - newPos.Y) / rayVec.Y
-			} else {
-				tMaxY = math.Inf(1)
-			}
-
-			stepZ := 0
-			tDeltaZ := 0.0
-			tMaxZ := 0.0
-			if rayVec.Z > 0 {
-				stepZ = 1
-				tDeltaZ = 1 / rayVec.Z
-				tMaxZ = (math.Floor(newPos.Z+1) - newPos.Z) / rayVec.Z
-			} else if rayVec.Z < 0 {
-				stepZ = -1
-				tDeltaZ = 1 / -rayVec.Z
-				tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
-			} else {
-				tMaxZ = math.Inf(1)
-			}
-
-			for i := 0; i < 250; i++ {
-				// newPos = newPos.Add(rayVec)
-				// newPos = newPos.AdvanceToNextBlockBoundary(rayVec)
-
-				if tMaxX < tMaxY && tMaxX < tMaxZ {
-					// Idea: store signed distance to nearest block per block
-					// in world map and use it to skip empty space faster.
-					newPos.X += float64(stepX)
-					tMaxX += tDeltaX
-				} else if tMaxY < tMaxZ {
-					newPos.Y += float64(stepY)
-					tMaxY += tDeltaY
-				} else {
-					newPos.Z += float64(stepZ)
-					tMaxZ += tDeltaZ
-				}
-
+			{
 				n := newPos.ToPointTrunc()
-				b, ok := world.Get(n)
-				if !ok {
-					// Advance vector to next full block?
+				b, _ := world.Get(n)
+				if b == nil {
+					// End of map reached, stop looking.
 					continue
 				}
-				if b.Reflective {
-					// Reflect ray by inverting Z component
-					isReflectionRay = true
-					rayVec = blockworld.Vec3{X: rayVec.X, Y: rayVec.Y, Z: -rayVec.Z}
-					newPos = newPos.Add(rayVec)
-					img.Set(x, img.Rect.Dy()-y, b.Color)
-					continue
+
+				face := blockworld.GetBlockFace(newPos, n)
+				orig := b.Color
+				switch face {
+				case blockworld.BLOCK_FACE_TOP:
+					rayVec.Z = -rayVec.Z
+					newPos.Z += 0.001
+				case blockworld.BLOCK_FACE_BOTTOM:
+					rayVec.Z = -rayVec.Z
+					newPos.Z -= 0.001
+				case blockworld.BLOCK_FACE_LEFT:
+					rayVec.X = -rayVec.X
+					newPos.X -= 0.001
+				case blockworld.BLOCK_FACE_RIGHT:
+					rayVec.X = -rayVec.X
+					newPos.X += 0.001
+				case blockworld.BLOCK_FACE_FRONT:
+					rayVec.Y = -rayVec.Y
+					newPos.Y += 0.001
+				case blockworld.BLOCK_FACE_BACK:
+					rayVec.Y = -rayVec.Y
+					newPos.Y -= 0.001
+				default:
+					img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
 				}
-				if isReflectionRay {
-					c1 := img.At(x, img.Rect.Dy()-y).(color.RGBA) // Color of the block we reflected off
-					c2 := b.Color
-					c1.A = 200
-					c := utils.CompositeNRGBA(c1, c2)
-					img.Set(x, img.Rect.Dy()-y, c)
-					break
+				// Reflected ray
+				newPos := world.RayMarchSdf(newPos, rayVec)
+				n = newPos.ToPointTrunc()
+				bRef, _ := world.Get(n)
+				if bRef != nil {
+					c := utils.CompositeNRGBA(orig, bRef.Color)
+					img.Set(x, img.Rect.Dy()-y, c) // flip y coord because ogl texture use bottom-left as origin
+				} else {
+					img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
 				}
-				img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
-				break
+
+				if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
+					fmt.Println("newPos", newPos, "n", n, "Face", face)
+					img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
+				}
+
+				// if b.Reflective {
+				// Reflect ray by inverting Z component
+				// isReflectionRay = true
+				// rayVec = blockworld.Vec3{X: rayVec.X, Y: rayVec.Y, Z: -rayVec.Z}
+				// newPos = newPos.Add(rayVec)
+				// stepZ *= -1
+				// tDeltaZ *= -1
+				// tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
+				// 	img.Set(x, img.Rect.Dy()-y, b.Color)
+				// 	continue
+				// }
+				// if isReflectionRay {
+				// 	c1 := img.At(x, img.Rect.Dy()-y).(color.RGBA) // Color of the block we reflected off
+				// 	c2 := b.Color
+				// 	c1.A = 200
+				// 	c := utils.CompositeNRGBA(c1, c2)
+				// 	img.Set(x, img.Rect.Dy()-y, c)
+				// 	break
+				// }
+
+				// d := newPos.Sub(world.PlayerPos).Length()
+				// depth.SetGray16(x, img.Rect.Dy()-y, color.Gray16{Y: uint16(0xffff - d*300)})
+
+				continue
 			}
 		}
 	}
+
+	// draw.Draw(img, img.Rect, depth, image.ZP, draw.Over)
+	// draw.DrawMask(img, img.Rect, image.NewUniform(color.NRGBA{R: 255, A: 64}), image.ZP, depth, image.ZP, draw.Over)
+
+	// draw.DrawMask(img, img.Rect, image.NewUniform(color.NRGBA{R: 255, A: 255}), image.ZP, depth, image.ZP, draw.Over)
 }
 
 func main() {
@@ -211,7 +282,7 @@ func main() {
 
 	glfw.WindowHint(glfw.DoubleBuffer, glfw.True)
 	glfw.WindowHint(glfw.FocusOnShow, glfw.True)
-	window, err := glfw.CreateWindow(640, 480, "My Window", nil, nil)
+	window, err := glfw.CreateWindow(1296, 729, "My Window", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -248,8 +319,30 @@ func main() {
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 	}
 
-	const renderScale = 8
+	var textureOverlay uint32
+	{
+		gl.GenTextures(1, &textureOverlay)
+
+		gl.BindTexture(gl.TEXTURE_2D, textureOverlay)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	}
+
+	var framebufferOverlay uint32
+	{
+		gl.GenFramebuffers(1, &framebufferOverlay)
+		gl.BindFramebuffer(gl.FRAMEBUFFER, framebufferOverlay)
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureOverlay, 0)
+
+		gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebufferOverlay)
+		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
+	}
+
+	const renderScale = 16
 	var w, h = window.GetFramebufferSize()
+	imgOverlay := image.NewRGBA(image.Rect(0, 0, w, h))
 	w /= renderScale
 	h /= renderScale
 	var img = image.NewRGBA(image.Rect(0, 0, w, h))
@@ -258,7 +351,8 @@ func main() {
 	// World setup
 	world := blockworld.NewBlockworld()
 	// err = maploader.LoadMap("./maps/AttackonDeuces.vxl", world)
-	err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	// err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	err = maploader.LoadMap("./maps/shigaichi4.vxl", world)
 	if err != nil {
 		panic(err)
 	}
@@ -273,6 +367,10 @@ func main() {
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
 	// world.PlayerDir = blockworld.Angle3{Theta: 90, Phi: 0}
 
+	for i := imgOverlay.Rect.Min.X; i < imgOverlay.Rect.Max.X; i++ {
+		imgOverlay.Set(i, i, color.RGBA{R: 255, A: 255})
+	}
+
 	var frameCount int64 = 0
 	var lastFrame = time.Now()
 
@@ -283,7 +381,20 @@ func main() {
 		gl.BindTexture(gl.TEXTURE_2D, texture)
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(w), int32(h), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
 
+		preBlit := time.Now()
+		gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer)
+		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 		gl.BlitFramebuffer(0, 0, int32(w), int32(h), 0, 0, int32(w)*renderScale, int32(h)*renderScale, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+		postBlit := time.Since(preBlit)
+		fmt.Println("Blit took", postBlit)
+
+		// // Overlay
+		// gl.BindTexture(gl.TEXTURE_2D, textureOverlay)
+		// gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(imgOverlay.Rect.Dx()), int32(imgOverlay.Rect.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(imgOverlay.Pix))
+
+		// gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebufferOverlay)
+		// gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
+		// gl.BlitFramebuffer(0, 0, int32(imgOverlay.Rect.Dx()), int32(imgOverlay.Rect.Dy()), 0, 0, int32(imgOverlay.Rect.Dx()), int32(imgOverlay.Rect.Dy()), gl.COLOR_BUFFER_BIT, gl.NEAREST)
 
 		window.SwapBuffers()
 		glfw.PollEvents()
@@ -293,6 +404,10 @@ func main() {
 		if frameCount%60 == 0 {
 			fmt.Println("Frametime", took, "FPS", 1/took.Seconds())
 			fmt.Println("PlayerPos", world.PlayerPos, "PlayerDir", world.PlayerDir)
+			b, _ := world.Get(world.PlayerPos.ToPointTrunc())
+			if b != nil {
+				fmt.Printf("Player pos block %+v\n", b)
+			}
 		}
 		lastFrame = time.Now()
 	}
