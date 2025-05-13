@@ -370,10 +370,12 @@ func (bw *Blockworld) Blocks() []Block {
 }
 
 func (bw *Blockworld) Get(p Point) (*Block, bool) {
-	if (p.X < 0 || p.X >= bw.x) || (p.Y < 0 || p.Y >= bw.y) || (p.Z < 0 || p.Z >= bw.z) {
+	if p.X < 0 || p.X >= bw.x || p.Y < 0 || p.Y >= bw.y || p.Z < 0 || p.Z >= bw.z {
+		// if (p.X < 0 || p.X >= bw.x) || (p.Y < 0 || p.Y >= bw.y) || (p.Z < 0 || p.Z >= bw.z) {
 		return nil, false
 	}
 	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
+	// b := &bw.blocks[p.Z+p.Y*bw.z+p.X*bw.z*bw.y]
 	return b, b.IsSet
 }
 
@@ -382,6 +384,8 @@ func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
 		return nil, false
 	}
 	b := &bw.blocks[x+y*bw.x+z*bw.x*bw.y]
+	// b := &bw.blocks[z+y*bw.z+x*bw.z*bw.y]
+
 	return b, b.IsSet
 }
 
@@ -391,6 +395,8 @@ func (bw *Blockworld) Set(x, y, z int, b Block) {
 	}
 	b.IsSet = true
 	bw.blocks[x+y*bw.x+z*bw.x*bw.y] = b
+	// bw.blocks[z+y*bw.z+x*bw.z*bw.y] = b
+
 }
 
 func (bw *Blockworld) CreateLightBlock(x, y, z int) {
@@ -410,7 +416,7 @@ func (bw *Blockworld) RayMarchSdf(start, dir Vec3) Vec3 {
 		if bc == nil || bc.IsSet || bc.IsLightSource {
 			break
 		}
-		if bc.DistanceToNearestBlock <= 3 {
+		if bc.DistanceToNearestBlock <= 2 {
 			start = start.AdvanceToNextBlockBoundary(dir)
 			continue
 		}
