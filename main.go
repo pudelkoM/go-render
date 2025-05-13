@@ -13,13 +13,13 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/pudelkoM/go-render/pkg/blockworld"
 	"github.com/pudelkoM/go-render/pkg/maploader"
-	"github.com/pudelkoM/go-render/pkg/utils"
 )
 
 func init() {
@@ -176,92 +176,163 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 	fovVDeg := fovHDeg * imgRatio
 	degPerPixel := fovHDeg / float64(img.Rect.Dx())
 
-	for y := 0; y < img.Rect.Dy(); y++ {
-		yd := (-fovVDeg / 2) + float64(y)*degPerPixel
-		for x := 0; x < img.Rect.Dx(); x++ {
-			xd := (-fovHDeg / 2) + float64(x)*degPerPixel
-			viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
-			rayVec := viewVec.RotateY(yd).RotateZ(xd)
-			rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
-			// isReflectionRay := false
+	const threads = 8
+	yDD := int(math.Ceil(float64(img.Rect.Dy()) / threads))
 
-			newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
-
-			{
-				n := newPos.ToPointTrunc()
-				b, _ := world.Get(n)
-				if b == nil {
-					// End of map reached, stop looking.
-					continue
-				}
-
-				face := blockworld.GetBlockFace(newPos, n)
-				orig := b.Color
-				switch face {
-				case blockworld.BLOCK_FACE_TOP:
-					rayVec.Z = -rayVec.Z
-					newPos.Z += 0.001
-				case blockworld.BLOCK_FACE_BOTTOM:
-					rayVec.Z = -rayVec.Z
-					newPos.Z -= 0.001
-				case blockworld.BLOCK_FACE_LEFT:
-					rayVec.X = -rayVec.X
-					newPos.X -= 0.001
-				case blockworld.BLOCK_FACE_RIGHT:
-					rayVec.X = -rayVec.X
-					newPos.X += 0.001
-				case blockworld.BLOCK_FACE_FRONT:
-					rayVec.Y = -rayVec.Y
-					newPos.Y += 0.001
-				case blockworld.BLOCK_FACE_BACK:
-					rayVec.Y = -rayVec.Y
-					newPos.Y -= 0.001
-				default:
-					img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
-				}
-				// Reflected ray
-				newPos := world.RayMarchSdf(newPos, rayVec)
-				n = newPos.ToPointTrunc()
-				bRef, _ := world.Get(n)
-				if bRef != nil {
-					c := utils.CompositeNRGBA(orig, bRef.Color)
-					img.Set(x, img.Rect.Dy()-y, c) // flip y coord because ogl texture use bottom-left as origin
-				} else {
-					img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
-				}
-
-				if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
-					fmt.Println("newPos", newPos, "n", n, "Face", face)
-					img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
-				}
-
-				// if b.Reflective {
-				// Reflect ray by inverting Z component
-				// isReflectionRay = true
-				// rayVec = blockworld.Vec3{X: rayVec.X, Y: rayVec.Y, Z: -rayVec.Z}
-				// newPos = newPos.Add(rayVec)
-				// stepZ *= -1
-				// tDeltaZ *= -1
-				// tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
-				// 	img.Set(x, img.Rect.Dy()-y, b.Color)
-				// 	continue
-				// }
-				// if isReflectionRay {
-				// 	c1 := img.At(x, img.Rect.Dy()-y).(color.RGBA) // Color of the block we reflected off
-				// 	c2 := b.Color
-				// 	c1.A = 200
-				// 	c := utils.CompositeNRGBA(c1, c2)
-				// 	img.Set(x, img.Rect.Dy()-y, c)
-				// 	break
-				// }
-
-				// d := newPos.Sub(world.PlayerPos).Length()
-				// depth.SetGray16(x, img.Rect.Dy()-y, color.Gray16{Y: uint16(0xffff - d*300)})
-
-				continue
+	wg := sync.WaitGroup{}
+	wg.Add(threads)
+	for t := 0; t < threads; t++ {
+		go func(t int) {
+			defer wg.Done()
+			yStart := t * yDD
+			if yStart >= img.Rect.Dy() {
+				return
 			}
-		}
+			yEnd := (t + 1) * yDD
+			if yEnd >= img.Rect.Dy() {
+				yEnd = img.Rect.Dy()
+			}
+			// fmt.Println("t", t, "yStart", yStart, "yEnd", yEnd)
+
+			for y := yStart; y < yEnd; y++ {
+				yd := (-fovVDeg / 2) + float64(y)*degPerPixel
+				for x := 0; x < img.Rect.Dx(); x++ {
+					xd := (-fovHDeg / 2) + float64(x)*degPerPixel
+					viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
+					rayVec := viewVec.RotateY(yd).RotateZ(xd)
+					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+					newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
+					n := newPos.ToPointTrunc()
+					b, _ := world.Get(n)
+					if b == nil {
+						// End of map reached, stop looking.
+						continue
+					}
+					img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+					if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
+						// fmt.Println("newPos", newPos, "n", n, "Face", face)
+						img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
+					}
+				}
+			}
+		}(t)
+
+		// for y := 0; y < img.Rect.Dy(); y++ {
+		// 	yd := (-fovVDeg / 2) + float64(y)*degPerPixel
+		// 	go func(t int) {
+		// 		defer wg.Done()
+		// 		xStart := t * (img.Rect.Dx() / threads)
+		// 		if xStart >= img.Rect.Dx() {
+		// 			return
+		// 		}
+		// 		xEnd := (t + 1) * (img.Rect.Dx() / threads)
+
+		// 		for x := xStart; x < xEnd && x < img.Rect.Dx(); x++ {
+		// 			xd := (-fovHDeg / 2) + float64(x)*degPerPixel
+		// 			viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
+		// 			rayVec := viewVec.RotateY(yd).RotateZ(xd)
+		// 			rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+		// 			newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
+		// 			n := newPos.ToPointTrunc()
+		// 			b, _ := world.Get(n)
+		// 			if b == nil {
+		// 				// End of map reached, stop looking.
+		// 				continue
+		// 			}
+		// 			img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+		// 			if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
+		// 				// fmt.Println("newPos", newPos, "n", n, "Face", face)
+		// 				img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
+		// 			}
+		// 		}
+		// 	}(t)
+		// }
+
+		// for x := 0; x < img.Rect.Dx(); x++ {
+		// 	xd := (-fovHDeg / 2) + float64(x)*degPerPixel
+		// 	viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
+		// 	rayVec := viewVec.RotateY(yd).RotateZ(xd)
+		// 	rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+		// 	// isReflectionRay := false
+
+		// 	newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
+
+		// 	{
+		// 		n := newPos.ToPointTrunc()
+		// 		b, _ := world.Get(n)
+		// 		if b == nil {
+		// 			// End of map reached, stop looking.
+		// 			continue
+		// 		}
+
+		// 		// face := blockworld.GetBlockFace(newPos, n)
+		// 		// // orig := b.Color
+		// 		// switch face {
+		// 		// case blockworld.BLOCK_FACE_TOP:
+		// 		// 	rayVec.Z = -rayVec.Z
+		// 		// 	newPos.Z += 0.001
+		// 		// case blockworld.BLOCK_FACE_BOTTOM:
+		// 		// 	rayVec.Z = -rayVec.Z
+		// 		// 	newPos.Z -= 0.001
+		// 		// case blockworld.BLOCK_FACE_LEFT:
+		// 		// 	rayVec.X = -rayVec.X
+		// 		// 	newPos.X -= 0.001
+		// 		// case blockworld.BLOCK_FACE_RIGHT:
+		// 		// 	rayVec.X = -rayVec.X
+		// 		// 	newPos.X += 0.001
+		// 		// case blockworld.BLOCK_FACE_FRONT:
+		// 		// 	rayVec.Y = -rayVec.Y
+		// 		// 	newPos.Y += 0.001
+		// 		// case blockworld.BLOCK_FACE_BACK:
+		// 		// 	rayVec.Y = -rayVec.Y
+		// 		// 	newPos.Y -= 0.001
+		// 		// default:
+		// 		// 	img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+		// 		// }
+		// 		// Reflected ray
+		// 		// newPos := world.RayMarchSdf(newPos, rayVec)
+		// 		// n = newPos.ToPointTrunc()
+		// 		// bRef, _ := world.Get(n)
+		// 		// if bRef != nil {
+		// 		// 	c := utils.CompositeNRGBA(orig, bRef.Color)
+		// 		// 	img.Set(x, img.Rect.Dy()-y, c) // flip y coord because ogl texture use bottom-left as origin
+		// 		// } else {
+		// 		img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+		// 		// }
+
+		// 		if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
+		// 			// fmt.Println("newPos", newPos, "n", n, "Face", face)
+		// 			img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
+		// 		}
+
+		// 		// if b.Reflective {
+		// 		// Reflect ray by inverting Z component
+		// 		// isReflectionRay = true
+		// 		// rayVec = blockworld.Vec3{X: rayVec.X, Y: rayVec.Y, Z: -rayVec.Z}
+		// 		// newPos = newPos.Add(rayVec)
+		// 		// stepZ *= -1
+		// 		// tDeltaZ *= -1
+		// 		// tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
+		// 		// 	img.Set(x, img.Rect.Dy()-y, b.Color)
+		// 		// 	continue
+		// 		// }
+		// 		// if isReflectionRay {
+		// 		// 	c1 := img.At(x, img.Rect.Dy()-y).(color.RGBA) // Color of the block we reflected off
+		// 		// 	c2 := b.Color
+		// 		// 	c1.A = 200
+		// 		// 	c := utils.CompositeNRGBA(c1, c2)
+		// 		// 	img.Set(x, img.Rect.Dy()-y, c)
+		// 		// 	break
+		// 		// }
+
+		// 		// d := newPos.Sub(world.PlayerPos).Length()
+		// 		// depth.SetGray16(x, img.Rect.Dy()-y, color.Gray16{Y: uint16(0xffff - d*300)})
+
+		// 		continue
+		// 	}
+		// }
 	}
+	wg.Wait()
 
 	// draw.Draw(img, img.Rect, depth, image.ZP, draw.Over)
 	// draw.DrawMask(img, img.Rect, image.NewUniform(color.NRGBA{R: 255, A: 64}), image.ZP, depth, image.ZP, draw.Over)
@@ -340,7 +411,7 @@ func main() {
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 	}
 
-	const renderScale = 16
+	const renderScale = 4
 	var w, h = window.GetFramebufferSize()
 	imgOverlay := image.NewRGBA(image.Rect(0, 0, w, h))
 	w /= renderScale
@@ -351,8 +422,8 @@ func main() {
 	// World setup
 	world := blockworld.NewBlockworld()
 	// err = maploader.LoadMap("./maps/AttackonDeuces.vxl", world)
-	// err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
-	err = maploader.LoadMap("./maps/shigaichi4.vxl", world)
+	err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	// err = maploader.LoadMap("./maps/shigaichi4.vxl", world)
 	if err != nil {
 		panic(err)
 	}
@@ -381,12 +452,12 @@ func main() {
 		gl.BindTexture(gl.TEXTURE_2D, texture)
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(w), int32(h), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
 
-		preBlit := time.Now()
+		// preBlit := time.Now()
 		gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer)
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 		gl.BlitFramebuffer(0, 0, int32(w), int32(h), 0, 0, int32(w)*renderScale, int32(h)*renderScale, gl.COLOR_BUFFER_BIT, gl.NEAREST)
-		postBlit := time.Since(preBlit)
-		fmt.Println("Blit took", postBlit)
+		// postBlit := time.Since(preBlit)
+		// fmt.Println("Blit took", postBlit)
 
 		// // Overlay
 		// gl.BindTexture(gl.TEXTURE_2D, textureOverlay)
@@ -406,7 +477,7 @@ func main() {
 			fmt.Println("PlayerPos", world.PlayerPos, "PlayerDir", world.PlayerDir)
 			b, _ := world.Get(world.PlayerPos.ToPointTrunc())
 			if b != nil {
-				fmt.Printf("Player pos block %+v\n", b)
+				// fmt.Printf("Player pos block %+v\n", b)
 			}
 		}
 		lastFrame = time.Now()
