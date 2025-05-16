@@ -1,7 +1,11 @@
 package utils
 
 import (
+	"image"
 	"image/color"
+	"image/png"
+	"math"
+	"os"
 )
 
 func CompositeNRGBA(c1 color.NRGBA, c2 color.NRGBA) color.NRGBA {
@@ -26,4 +30,27 @@ func ColorDarken(c color.NRGBA, factor float64) color.NRGBA {
 	// c.B -= factor
 	// c.A -= factor
 	return c
+}
+
+func AlmostEqual(f1, f2 float64) bool {
+	const epsilon = 1e-6
+	return math.Abs(f1-f2) < epsilon
+}
+
+func LoadPNG(path string) (*image.NRGBA, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	img, err := png.Decode(file)
+	if err != nil {
+		panic(err)
+	}
+	imgNRGBA := img.(*image.NRGBA)
+	if imgNRGBA == nil {
+		panic("img is not NRGBA")
+	}
+
+	return imgNRGBA, nil
 }

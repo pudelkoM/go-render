@@ -18,8 +18,14 @@ import (
 
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/pudelkoM/go-render/pkg/audio"
 	"github.com/pudelkoM/go-render/pkg/blockworld"
+	"github.com/pudelkoM/go-render/pkg/labsolver"
 	"github.com/pudelkoM/go-render/pkg/maploader"
+	"github.com/pudelkoM/go-render/pkg/utils"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 )
 
 func init() {
@@ -69,6 +75,18 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	}
 	if w.GetKey(glfw.KeyRight) == glfw.Press || w.GetKey(glfw.KeyRight) == glfw.Repeat {
 		world.PlayerDir = world.PlayerDir.RotatePhi(rotSpeed)
+	}
+	if w.GetKey(glfw.KeyMinus) == glfw.Press {
+		world.PlayerFovHDeg -= 1.5
+		if world.PlayerFovHDeg < 1 {
+			world.PlayerFovHDeg = 1
+		}
+	}
+	if w.GetKey(glfw.KeyEqual) == glfw.Press {
+		world.PlayerFovHDeg += 1.5
+		if world.PlayerFovHDeg > 359 {
+			world.PlayerFovHDeg = 359
+		}
 	}
 	if w.GetKey(glfw.KeyN) == glfw.Press {
 		dir := "./maps/"
@@ -163,7 +181,7 @@ func amatidesWoo(newPos, rayVec blockworld.Vec3, world *blockworld.Blockworld) b
 	return newPos
 }
 
-func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) {
+func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, lastFrame time.Time) {
 	// clear image
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.ZP, draw.Src)
 
@@ -172,7 +190,7 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 	draw.Draw(depth, depth.Rect, image.NewUniform(color.Gray{Y: 0}), image.ZP, draw.Src)
 
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
-	fovHDeg := 55.
+	fovHDeg := world.PlayerFovHDeg
 	fovVDeg := fovHDeg * imgRatio
 	degPerPixel := fovHDeg / float64(img.Rect.Dx())
 
@@ -203,15 +221,21 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
 					newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
 					n := newPos.ToPointTrunc()
-					b, _ := world.Get(n)
-					if b == nil {
+					// b, _ := world.Get(n)
+					// if b == nil {
+					// 	// End of map reached, stop looking.
+					// 	continue
+					// }
+					// img.Set(x, y, b.Color)
+					c, isSet := world.GetWithSubPos(n, newPos)
+					if !isSet {
 						// End of map reached, stop looking.
 						continue
 					}
-					img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+					img.Set(x, y, c)
 					if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
 						// fmt.Println("newPos", newPos, "n", n, "Face", face)
-						img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
+						img.SetRGBA(x, y, color.RGBA{R: 255, A: 255})
 					}
 				}
 			}
@@ -334,6 +358,19 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 	}
 	wg.Wait()
 
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(color.RGBA{G: 255, A: 255}),
+		Face: basicfont.Face7x13,
+		Dot:  fixed.P(2, 12),
+	}
+	dt := time.Since(lastFrame)
+	d.DrawString(fmt.Sprintf("FPS: %03.0f ", 1/dt.Seconds()))
+	d.DrawString(fmt.Sprintf("Frame: %v ", frameCount))
+	d.Dot = fixed.P(2, 24)
+	d.DrawString(fmt.Sprintf("Pos: %v Dir: %v ", world.PlayerPos, world.PlayerDir))
+	d.DrawString(fmt.Sprintf("Fov: %0.2f ", world.PlayerFovHDeg))
+
 	// draw.Draw(img, img.Rect, depth, image.ZP, draw.Over)
 	// draw.DrawMask(img, img.Rect, image.NewUniform(color.NRGBA{R: 255, A: 64}), image.ZP, depth, image.ZP, draw.Over)
 
@@ -345,6 +382,8 @@ func main() {
 		log.Fatal(http.ListenAndServe(":6060", nil))
 	}()
 
+	audioCtx := audio.InitAudio()
+
 	err := glfw.Init()
 	if err != nil {
 		panic(err)
@@ -353,7 +392,7 @@ func main() {
 
 	glfw.WindowHint(glfw.DoubleBuffer, glfw.True)
 	glfw.WindowHint(glfw.FocusOnShow, glfw.True)
-	window, err := glfw.CreateWindow(1296, 729, "My Window", nil, nil)
+	window, err := glfw.CreateWindow(1200, 720, "FWMC brainrot sim", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -422,17 +461,31 @@ func main() {
 	// World setup
 	world := blockworld.NewBlockworld()
 	// err = maploader.LoadMap("./maps/AttackonDeuces.vxl", world)
-	err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	// err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
 	// err = maploader.LoadMap("./maps/shigaichi4.vxl", world)
 	if err != nil {
 		panic(err)
 	}
+
+	fuwa, err := utils.LoadPNG("./assets/fuwa_64.png")
+	if err != nil {
+		panic(err)
+	}
+	moco, err := utils.LoadPNG("./assets/moco_64.png")
+	if err != nil {
+		panic(err)
+	}
+	world.SetBlockTex(fuwa, moco)
+
+	blockworld.GenerateLabyrinth(world, 19, 19)
+	// blockworld.GenerateLabyrinth(world, 31, 31)
+
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
 	// world.PlayerDir = blockworld.Angle3{Theta: 0, Phi: 0}
 
 	// Side view.
-	world.PlayerPos = blockworld.Vec3{X: 190, Y: 310, Z: 33}
-	world.PlayerDir = blockworld.Angle3{Theta: 95, Phi: 325}
+	// world.PlayerPos = blockworld.Vec3{X: 190, Y: 310, Z: 33}
+	// world.PlayerDir = blockworld.Angle3{Theta: 95, Phi: 325}
 
 	// Starting window.
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
@@ -445,9 +498,13 @@ func main() {
 	var frameCount int64 = 0
 	var lastFrame = time.Now()
 
+	solverState := &labsolver.LabSolver{}
+
 	for !window.ShouldClose() {
 		handleInputs(window, world)
-		renderBuf(img, world, frameCount)
+		labsolver.Advance(world, solverState, frameCount)
+		audio.HandleAudio(audioCtx, world, frameCount)
+		renderBuf(img, world, frameCount, lastFrame)
 
 		gl.BindTexture(gl.TEXTURE_2D, texture)
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(w), int32(h), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
@@ -455,17 +512,43 @@ func main() {
 		// preBlit := time.Now()
 		gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer)
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
-		gl.BlitFramebuffer(0, 0, int32(w), int32(h), 0, 0, int32(w)*renderScale, int32(h)*renderScale, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+		// gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, framebufferOverlay)
+		gl.BlitFramebuffer(
+			0, int32(h), int32(w), 0,
+			0, 0, int32(w)*renderScale, int32(h)*renderScale,
+			gl.COLOR_BUFFER_BIT, gl.NEAREST)
 		// postBlit := time.Since(preBlit)
 		// fmt.Println("Blit took", postBlit)
 
+		// // Read window framebuffer
+		// // gl.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
+		// gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebufferOverlay)
+		// gl.ReadPixels(0, 0, int32(w)*renderScale, int32(h)*renderScale, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(imgOverlay.Pix))
+
+		// postBlit := time.Since(preBlit)
+		// fmt.Println("dt took", postBlit)
+
 		// // Overlay
+		// d := &font.Drawer{
+		// 	Dst:  imgOverlay,
+		// 	Src:  image.NewUniform(color.RGBA{G: 255, A: 255}),
+		// 	Face: basicfont.Face7x13,
+		// 	Dot:  fixed.P(10, 20),
+		// }
+		// dt := time.Since(lastFrame)
+		// d.DrawString(fmt.Sprintf("FPS: %0.0f", 1/dt.Seconds()))
 		// gl.BindTexture(gl.TEXTURE_2D, textureOverlay)
 		// gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(imgOverlay.Rect.Dx()), int32(imgOverlay.Rect.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(imgOverlay.Pix))
 
 		// gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebufferOverlay)
 		// gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
-		// gl.BlitFramebuffer(0, 0, int32(imgOverlay.Rect.Dx()), int32(imgOverlay.Rect.Dy()), 0, 0, int32(imgOverlay.Rect.Dx()), int32(imgOverlay.Rect.Dy()), gl.COLOR_BUFFER_BIT, gl.NEAREST)
+		// gl.BlitFramebuffer(
+		// 	0, int32(imgOverlay.Rect.Dy()), int32(imgOverlay.Rect.Dx()), 0,
+		// 	0, 0, int32(imgOverlay.Rect.Dx()), int32(imgOverlay.Rect.Dy()),
+		// 	gl.COLOR_BUFFER_BIT, gl.NEAREST)
+
+		// postBlit := time.Since(preBlit)
+		// fmt.Println("total blit took", postBlit)
 
 		window.SwapBuffers()
 		glfw.PollEvents()
