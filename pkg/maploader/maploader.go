@@ -3,10 +3,8 @@ package maploader
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"image/color"
 	"os"
-	"time"
 
 	"github.com/pudelkoM/go-render/pkg/blockworld"
 )
@@ -49,21 +47,16 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 					world.Set(x, y, z, blockworld.Block{
 						Color:      col,
 						Reflective: z == 0,
+						IsSet:      true,
 					})
 				}
 			}
 		}
 	}
 	world.CreateLightBlock(256, 280, 35)
-	t0 := time.Now()
-	world.ComputeShadows()
-	dt := time.Since(t0)
-	fmt.Println("ComputeShadows took", dt)
 
-	t0 = time.Now()
-	world.ComputeNearestBlocks()
-	dt = time.Since(t0)
-	fmt.Println("ComputeNearestBlocks took", dt)
+	world.Finalize()
+
 	return nil
 }
 

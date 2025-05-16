@@ -2,9 +2,11 @@ package blockworld
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"math"
 	"math/rand"
+	"time"
 
 	"github.com/pudelkoM/go-render/pkg/utils"
 )
@@ -117,6 +119,10 @@ func (a Angle3) ToCartesianVec3(r float64) Vec3 {
 	}
 }
 
+func (a Angle3) String() string {
+	return fmt.Sprintf("{Theta: %0.0f, Phi: %0.0f}", a.Theta, a.Phi)
+}
+
 type Vec3 struct {
 	X, Y, Z float64
 }
@@ -223,6 +229,17 @@ func (v Vec3) ToNearestPoint() Point {
 }
 
 func (v Vec3) ToPointTrunc() Point {
+	// TODO: trunc to zero creates a bug with rays terminating at -1 < x < 0,
+	// but looking at blocks from (x,0,0) instead.
+	// if v.X < 0 {
+	// 	v.X--
+	// }
+	// if v.Y < 0 {
+	// 	v.Y--
+	// }
+	// if v.Z < 0 {
+	// 	v.Z--
+	// }
 	return Point{
 		X: int(v.X),
 		Y: int(v.Y),
@@ -318,21 +335,31 @@ type Block struct {
 }
 
 type Blockworld struct {
-	blocks      []Block
-	x, y, z     int
-	BlockSizePx int
-	PlayerPos   Vec3
-	PlayerDir   Angle3
-	Lights      []Point
+	blocks        []Block
+	x, y, z       int
+	BlockSizePx   int
+	PlayerPos     Vec3
+	PlayerDir     Angle3
+	PlayerFovHDeg float64
+	Lights        []Point
+
+	blockTex1 *image.NRGBA
+	blockTex2 *image.NRGBA
 }
 
 func NewBlockworld() *Blockworld {
 	return &Blockworld{
-		blocks:      make([]Block, 0),
-		BlockSizePx: blockSizePx,
-		PlayerPos:   Vec3{X: 170, Y: 170, Z: 64},
-		PlayerDir:   Angle3{Theta: 90, Phi: 45},
+		blocks:        make([]Block, 0),
+		BlockSizePx:   blockSizePx,
+		PlayerPos:     Vec3{X: 170, Y: 170, Z: 64},
+		PlayerDir:     Angle3{Theta: 90, Phi: 45},
+		PlayerFovHDeg: 55.,
 	}
+}
+
+func (bw *Blockworld) SetBlockTex(tex1 *image.NRGBA, tex2 *image.NRGBA) {
+	bw.blockTex1 = tex1
+	bw.blockTex2 = tex2
 }
 
 func (bw *Blockworld) Randomize() {
@@ -365,18 +392,66 @@ func (bw *Blockworld) SetSize(x, y, z int) {
 	bw.Lights = make([]Point, 0)
 }
 
+func (bw *Blockworld) GetSize() (int, int, int) {
+	return bw.x, bw.y, bw.z
+}
+
+func (bw *Blockworld) Finalize() {
+	t0 := time.Now()
+	bw.ComputeShadows()
+	dt := time.Since(t0)
+	fmt.Println("ComputeShadows took", dt)
+
+	t0 = time.Now()
+	bw.ComputeNearestBlocks()
+	dt = time.Since(t0)
+	fmt.Println("ComputeNearestBlocks took", dt)
+}
+
 func (bw *Blockworld) Blocks() []Block {
 	return bw.blocks
 }
 
 func (bw *Blockworld) Get(p Point) (*Block, bool) {
 	if p.X < 0 || p.X >= bw.x || p.Y < 0 || p.Y >= bw.y || p.Z < 0 || p.Z >= bw.z {
-		// if (p.X < 0 || p.X >= bw.x) || (p.Y < 0 || p.Y >= bw.y) || (p.Z < 0 || p.Z >= bw.z) {
 		return nil, false
 	}
 	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
-	// b := &bw.blocks[p.Z+p.Y*bw.z+p.X*bw.z*bw.y]
 	return b, b.IsSet
+}
+
+func (bw *Blockworld) GetWithSubPos(p Point, intersect Vec3) (color.Color, bool) {
+	if p.X < 0 || p.X >= bw.x || p.Y < 0 || p.Y >= bw.y || p.Z < 0 || p.Z >= bw.z {
+		return color.NRGBA{}, false
+	}
+
+	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
+	if !b.IsSet {
+		return color.NRGBA{}, false
+	}
+
+	_, fracX := math.Modf(intersect.X)
+	_, fracY := math.Modf(intersect.Y)
+	_, fracZ := math.Modf(intersect.Z)
+
+	fracX = 1 - fracX
+	fracY = 1 - fracY
+	fracZ = 1 - fracZ
+
+	if epsilonEqual(fracX, 0) || epsilonEqual(fracX, 1) {
+		c := bw.blockTex1.At(int((fracY)*float64(bw.blockTex1.Bounds().Dx())), int(fracZ*float64(bw.blockTex1.Bounds().Dy())))
+		return c, b.IsSet
+	}
+	if epsilonEqual(fracY, 0) || epsilonEqual(fracY, 1) {
+		c := bw.blockTex2.At(int(fracX*float64(bw.blockTex2.Bounds().Dx())), int(fracZ*float64(bw.blockTex2.Bounds().Dy())))
+		return c, b.IsSet
+	}
+	// if epsilonEqual(fracZ, 0) || epsilonEqual(fracZ, 1) {
+	// 	c := bw.blockTex2.At(int(fracX*float64(bw.blockTex2.Bounds().Dx())), int(fracY*float64(bw.blockTex2.Bounds().Dy())))
+	// 	return c, b.IsSet
+	// }
+
+	return b.Color, b.IsSet
 }
 
 func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
@@ -393,10 +468,7 @@ func (bw *Blockworld) Set(x, y, z int, b Block) {
 	if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
 		return
 	}
-	b.IsSet = true
 	bw.blocks[x+y*bw.x+z*bw.x*bw.y] = b
-	// bw.blocks[z+y*bw.z+x*bw.z*bw.y] = b
-
 }
 
 func (bw *Blockworld) CreateLightBlock(x, y, z int) {
