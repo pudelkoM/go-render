@@ -233,10 +233,6 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 						continue
 					}
 					img.Set(x, y, c)
-					if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
-						// fmt.Println("newPos", newPos, "n", n, "Face", face)
-						img.SetRGBA(x, y, color.RGBA{R: 255, A: 255})
-					}
 				}
 			}
 		}(t)
@@ -264,10 +260,6 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 		// 				continue
 		// 			}
 		// 			img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
-		// 			if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
-		// 				// fmt.Println("newPos", newPos, "n", n, "Face", face)
-		// 				img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
-		// 			}
 		// 		}
 		// 	}(t)
 		// }
@@ -324,11 +316,6 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 		// 		img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
 		// 		// }
 
-		// 		if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
-		// 			// fmt.Println("newPos", newPos, "n", n, "Face", face)
-		// 			img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
-		// 		}
-
 		// 		// if b.Reflective {
 		// 		// Reflect ray by inverting Z component
 		// 		// isReflectionRay = true
@@ -357,6 +344,8 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 		// }
 	}
 	wg.Wait()
+
+	img.SetRGBA(img.Rect.Dx()/2, img.Rect.Dy()/2, color.RGBA{R: 255, A: 255})
 
 	d := &font.Drawer{
 		Dst:  img,
