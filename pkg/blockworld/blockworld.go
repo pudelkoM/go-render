@@ -95,6 +95,13 @@ func (a Angle3) RotatePhi(angle float64) Angle3 {
 	}.Normalize()
 }
 
+func (a Angle3) ResetPhi() Angle3 {
+	return Angle3{
+		Theta: a.Theta,
+		Phi:   0,
+	}.Normalize()
+}
+
 func (a Angle3) RotateTheta(angle float64) Angle3 {
 	return Angle3{
 		Theta: a.Theta + angle,
@@ -429,6 +436,9 @@ func (bw *Blockworld) GetWithSubPos(p Point, intersect Vec3) (color.Color, bool)
 	if !b.IsSet {
 		return color.NRGBA{}, false
 	}
+	if bw.blockTex1 == nil || bw.blockTex2 == nil {
+		return b.Color, b.IsSet
+	}
 
 	_, fracX := math.Modf(intersect.X)
 	_, fracY := math.Modf(intersect.Y)
@@ -488,12 +498,13 @@ func (bw *Blockworld) RayMarchSdf(start, dir Vec3) Vec3 {
 		if bc == nil || bc.IsSet || bc.IsLightSource {
 			break
 		}
-		if bc.DistanceToNearestBlock <= 2 {
+		if bc.DistanceToNearestBlock <= 4 {
 			start = start.AdvanceToNextBlockBoundary(dir)
 			continue
+		} else {
+			const sqrt3 = 1.73205080757
+			start = start.Add(dir.Mul(float64(bc.DistanceToNearestBlock-1) / sqrt3))
 		}
-		const sqrt3 = 1.73205080757
-		start = start.Add(dir.Mul(float64(bc.DistanceToNearestBlock-2) / sqrt3))
 		// totalSkippedBlocks += int(bc.DistanceToNearestBlock - 2)
 		// skipBlocks = append(skipBlocks, bc.DistanceToNearestBlock)
 	}

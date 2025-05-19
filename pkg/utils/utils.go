@@ -6,6 +6,8 @@ import (
 	"image/png"
 	"math"
 	"os"
+
+	"golang.org/x/exp/constraints"
 )
 
 func CompositeNRGBA(c1 color.NRGBA, c2 color.NRGBA) color.NRGBA {
@@ -53,4 +55,14 @@ func LoadPNG(path string) (*image.NRGBA, error) {
 	}
 
 	return imgNRGBA, nil
+}
+
+func Clamp[T constraints.Ordered](value, min, max T) T {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
 }
