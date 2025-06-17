@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/pudelkoM/go-render/pkg/utils"
+
+	"github.com/s0rg/quadtree"
 )
 
 const blockSizePx = 25
@@ -333,6 +335,64 @@ func GetBlockFace(pos Vec3, block Point) int {
 	return -1
 }
 
+type PresenceMap struct {
+	x, y, z int
+	present []uint8
+	tree    *quadtree.Tree[int]
+}
+
+func NewPresenceMap(x, y, z int) *PresenceMap {
+	return &PresenceMap{
+		present: make([]uint8, x*y*z),
+		x:       x,
+		y:       y,
+		z:       z,
+		tree:    quadtree.New[int](100.0, 100.0, 4),
+	}
+}
+
+func (pm *PresenceMap) Get(p Point) uint8 {
+	if p.X < 0 || p.X >= pm.x || p.Y < 0 || p.Y >= pm.y || p.Z < 0 || p.Z >= pm.z {
+		return 0
+	}
+	return pm.present[p.X+p.Y*pm.x+p.Z*pm.x*pm.y]
+}
+
+func (pm *PresenceMap) Set(p Point, d uint8) {
+	if p.X < 0 || p.X >= pm.x || p.Y < 0 || p.Y >= pm.y || p.Z < 0 || p.Z >= pm.z {
+		return
+	}
+	pm.present[p.X+p.Y*pm.x+p.Z*pm.x*pm.y] = d
+}
+
+func truncDistance(d int16) uint8 {
+	if d > 255 {
+		return 255
+	} else if d < 0 {
+		return 0
+	} else {
+		return uint8(d)
+	}
+}
+
+func (pm *PresenceMap) FromBlockworld(bw *Blockworld) {
+	pm.present = make([]uint8, bw.x*bw.y*bw.z)
+	pm.x = bw.x
+	pm.y = bw.y
+	pm.z = bw.z
+
+	for z := range bw.z {
+		for y := range bw.y {
+			for x := range bw.x {
+				p := Point{x, y, z}
+				b, _ := bw.Get(p)
+				d := truncDistance(b.DistanceToNearestBlock)
+				pm.Set(p, d)
+			}
+		}
+	}
+}
+
 type Block struct {
 	Color                  color.NRGBA
 	IsSet                  bool // a zero-value block is not set, i.e. air
@@ -343,6 +403,7 @@ type Block struct {
 
 type Blockworld struct {
 	blocks        []Block
+	pm            *PresenceMap
 	x, y, z       int
 	BlockSizePx   int
 	PlayerPos     Vec3
@@ -357,6 +418,7 @@ type Blockworld struct {
 func NewBlockworld() *Blockworld {
 	return &Blockworld{
 		blocks:        make([]Block, 0),
+		pm:            NewPresenceMap(0, 0, 0),
 		BlockSizePx:   blockSizePx,
 		PlayerPos:     Vec3{X: 170, Y: 170, Z: 64},
 		PlayerDir:     Angle3{Theta: 90, Phi: 45},
@@ -405,14 +467,20 @@ func (bw *Blockworld) GetSize() (int, int, int) {
 
 func (bw *Blockworld) Finalize() {
 	t0 := time.Now()
-	bw.ComputeShadows()
+	bw.ComputeNearestBlocks()
 	dt := time.Since(t0)
-	fmt.Println("ComputeShadows took", dt)
+	fmt.Println("ComputeNearestBlocks took", dt)
 
 	t0 = time.Now()
-	bw.ComputeNearestBlocks()
+	bw.pm.FromBlockworld(bw)
 	dt = time.Since(t0)
-	fmt.Println("ComputeNearestBlocks took", dt)
+	fmt.Println("Building PresenceMap took", dt)
+
+	t0 = time.Now()
+	bw.ComputeShadows()
+	dt = time.Since(t0)
+	fmt.Println("ComputeShadows took", dt)
+
 }
 
 func (bw *Blockworld) Blocks() []Block {
@@ -489,21 +557,32 @@ func (bw *Blockworld) CreateLightBlock(x, y, z int) {
 	bw.Lights = append(bw.Lights, Point{X: x, Y: y, Z: z})
 }
 
-func (bw *Blockworld) RayMarchSdf(start, dir Vec3) Vec3 {
+func (bw *Blockworld) RayMarchSdf(start, dir Vec3) (Vec3, color.Color) {
 	// skipBlocks := []int16{}
 	// totalSkippedBlocks := 0
+	iterations := 0
 
 	for {
-		bc, _ := bw.Get(start.ToPointTrunc())
-		if bc == nil || bc.IsSet || bc.IsLightSource {
+		if iterations > 50 {
 			break
 		}
-		if bc.DistanceToNearestBlock <= 4 {
+		iterations++
+		d := bw.pm.Get(start.ToPointTrunc())
+		if d == 0 {
+			break
+		}
+		// bc, _ := bw.Get(start.ToPointTrunc())
+		// if bc == nil || bc.IsSet || bc.IsLightSource {
+		// 	break
+		// }
+		if d <= 4 {
+			// if bc.DistanceToNearestBlock <= 4 {
 			start = start.AdvanceToNextBlockBoundary(dir)
 			continue
 		} else {
 			const sqrt3 = 1.73205080757
-			start = start.Add(dir.Mul(float64(bc.DistanceToNearestBlock-1) / sqrt3))
+			// start = start.Add(dir.Mul(float64(bc.DistanceToNearestBlock-1) / sqrt3))
+			start = start.Add(dir.Mul(float64(d-1) / sqrt3))
 		}
 		// totalSkippedBlocks += int(bc.DistanceToNearestBlock - 2)
 		// skipBlocks = append(skipBlocks, bc.DistanceToNearestBlock)
@@ -512,7 +591,8 @@ func (bw *Blockworld) RayMarchSdf(start, dir Vec3) Vec3 {
 	// if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
 	// 	fmt.Println("skip blocks", skipBlocks, "total skipped", totalSkippedBlocks)
 	// }
-	return start
+	// return start
+	return start, color.NRGBA{R: uint8(iterations), G: uint8(iterations), B: uint8(iterations), A: 255}
 }
 
 func (bw *Blockworld) ComputeShadows() {
@@ -540,7 +620,7 @@ func (bw *Blockworld) ComputeShadows() {
 				// rayVec := l.ToVec3().Add(Vec3{X: 0.5, Y: 0.5, Z: 0.5}).Sub(c).Normalize()
 				// c := Point{X: x, Y: y, Z: z}.ToVec3()
 				rayVec := l.Sub(c).Normalize()
-				newPos := bw.RayMarchSdf(c, rayVec)
+				newPos, _ := bw.RayMarchSdf(c, rayVec)
 
 				b2, _ := bw.Get(newPos.ToPointTrunc())
 				if b2 != nil && b2.IsLightSource {

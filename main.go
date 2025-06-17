@@ -18,11 +18,8 @@ import (
 
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
-	"github.com/pudelkoM/go-render/pkg/audio"
 	"github.com/pudelkoM/go-render/pkg/blockworld"
-	"github.com/pudelkoM/go-render/pkg/labsolver"
 	"github.com/pudelkoM/go-render/pkg/maploader"
-	"github.com/pudelkoM/go-render/pkg/utils"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
@@ -219,20 +216,21 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 					viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
 					rayVec := viewVec.RotateY(yd).RotateZ(xd)
 					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
-					newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
-					n := newPos.ToPointTrunc()
+					_, c := world.RayMarchSdf(world.PlayerPos, rayVec)
+					img.Set(x, y, c)
+					// n := newPos.ToPointTrunc()
 					// b, _ := world.Get(n)
 					// if b == nil {
 					// 	// End of map reached, stop looking.
 					// 	continue
 					// }
 					// img.Set(x, y, b.Color)
-					c, isSet := world.GetWithSubPos(n, newPos)
-					if !isSet {
-						// End of map reached, stop looking.
-						continue
-					}
-					img.Set(x, y, c)
+					// c, isSet := world.GetWithSubPos(n, newPos)
+					// if !isSet {
+					// 	// End of map reached, stop looking.
+					// 	continue
+					// }
+					// img.Set(x, y, c)
 				}
 			}
 		}(t)
@@ -371,7 +369,7 @@ func main() {
 		log.Fatal(http.ListenAndServe(":6060", nil))
 	}()
 
-	audioCtx := audio.InitAudio()
+	// audioCtx := audio.InitAudio()
 
 	err := glfw.Init()
 	if err != nil {
@@ -450,31 +448,32 @@ func main() {
 	// World setup
 	world := blockworld.NewBlockworld()
 	// err = maploader.LoadMap("./maps/AttackonDeuces.vxl", world)
-	// err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
 	// err = maploader.LoadMap("./maps/shigaichi4.vxl", world)
 	if err != nil {
 		panic(err)
 	}
 
-	fuwa, err := utils.LoadPNG("./assets/fuwa_64.png")
-	if err != nil {
-		panic(err)
-	}
-	moco, err := utils.LoadPNG("./assets/moco_64.png")
-	if err != nil {
-		panic(err)
-	}
-	world.SetBlockTex(fuwa, moco)
+	// fuwa, err := utils.LoadPNG("./assets/fuwa_64.png")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// moco, err := utils.LoadPNG("./assets/moco_64.png")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// world.SetBlockTex(fuwa, moco)
 
-	blockworld.GenerateLabyrinth(world, 19, 19)
+	// blockworld.GenerateLabyrinth(world, 19, 19)
+
 	// blockworld.GenerateLabyrinth(world, 31, 31)
 
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
 	// world.PlayerDir = blockworld.Angle3{Theta: 0, Phi: 0}
 
 	// Side view.
-	// world.PlayerPos = blockworld.Vec3{X: 190, Y: 310, Z: 33}
-	// world.PlayerDir = blockworld.Angle3{Theta: 95, Phi: 325}
+	world.PlayerPos = blockworld.Vec3{X: 190, Y: 310, Z: 33}
+	world.PlayerDir = blockworld.Angle3{Theta: 95, Phi: 325}
 
 	// Starting window.
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
@@ -487,12 +486,12 @@ func main() {
 	var frameCount int64 = 0
 	var lastFrame = time.Now()
 
-	solverState := &labsolver.LabSolver{}
+	// solverState := &labsolver.LabSolver{}
 
 	for !window.ShouldClose() {
 		handleInputs(window, world)
-		labsolver.Advance(world, solverState, frameCount)
-		audio.HandleAudio(audioCtx, world, frameCount)
+		// labsolver.Advance(world, solverState, frameCount)
+		// audio.HandleAudio(audioCtx, world, frameCount)
 		renderBuf(img, world, frameCount, lastFrame)
 
 		gl.BindTexture(gl.TEXTURE_2D, texture)
