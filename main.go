@@ -20,9 +20,7 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/pudelkoM/go-render/pkg/audio"
 	"github.com/pudelkoM/go-render/pkg/blockworld"
-	"github.com/pudelkoM/go-render/pkg/labsolver"
 	"github.com/pudelkoM/go-render/pkg/maploader"
-	"github.com/pudelkoM/go-render/pkg/utils"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
@@ -32,17 +30,22 @@ func init() {
 	// GLFW: This is needed to arrange that main() runs on main thread.
 	// See documentation for functions that are only allowed to be called from the main thread.
 	runtime.LockOSThread()
+
+	// runtime.SetCPUProfileRate(1000)
 }
 
 var (
 	mapIndex = 0
+
+	fovCorrection = false
+	raySpacing    = 0.001
 )
 
 func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	if w.GetKey(glfw.KeyEscape) == glfw.Press {
 		w.SetShouldClose(true)
 	}
-	const speed = 0.3
+	const speed = 0.1
 	const rotSpeed = 2.
 	if w.GetKey(glfw.KeyA) == glfw.Press || w.GetKey(glfw.KeyA) == glfw.Repeat {
 		world.PlayerPos = world.PlayerPos.Add(world.PlayerDir.ResetTheta().RotatePhi(-90).ToCartesianVec3(speed))
@@ -103,6 +106,15 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 		if err != nil {
 			panic(err)
 		}
+	}
+	if w.GetKey(glfw.KeyF) == glfw.Press {
+		fovCorrection = !fovCorrection
+	}
+	if w.GetKey(glfw.KeyO) == glfw.Press {
+		raySpacing += 0.0005
+	}
+	if w.GetKey(glfw.KeyP) == glfw.Press {
+		raySpacing -= 0.0005
 	}
 }
 
@@ -181,13 +193,18 @@ func amatidesWoo(newPos, rayVec blockworld.Vec3, world *blockworld.Blockworld) b
 	return newPos
 }
 
+func manualColor(c color.NRGBA) color.RGBA {
+	r, g, b, a := c.RGBA()
+	return color.RGBA{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8), uint8(a >> 8)}
+}
+
 func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, lastFrame time.Time) {
 	// clear image
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.ZP, draw.Src)
 
 	// depth buffer
-	depth := image.NewGray16(image.Rect(0, 0, img.Rect.Dx(), img.Rect.Dy()))
-	draw.Draw(depth, depth.Rect, image.NewUniform(color.Gray{Y: 0}), image.ZP, draw.Src)
+	// depth := image.NewGray16(image.Rect(0, 0, img.Rect.Dx(), img.Rect.Dy()))
+	// draw.Draw(depth, depth.Rect, image.NewUniform(color.Gray{Y: 0}), image.ZP, draw.Src)
 
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
 	fovHDeg := world.PlayerFovHDeg
@@ -204,6 +221,7 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 			defer wg.Done()
 			yStart := t * yDD
 			if yStart >= img.Rect.Dy() {
+				// break
 				return
 			}
 			yEnd := (t + 1) * yDD
@@ -214,25 +232,119 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 
 			for y := yStart; y < yEnd; y++ {
 				yd := (-fovVDeg / 2) + float64(y)*degPerPixel
+				viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}.RotateY(yd)
+				// if fovCorrection {
+				// 	fy := (float64(y) - (float64(img.Rect.Dy()) / 2)) / (float64(img.Rect.Dy()) / 2)
+				// 	yd -= fy * 10
+				// }
 				for x := 0; x < img.Rect.Dx(); x++ {
+					// for x := 0; x < img.Rect.Dx()-3; x += 4 {
 					xd := (-fovHDeg / 2) + float64(x)*degPerPixel
-					viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
-					rayVec := viewVec.RotateY(yd).RotateZ(xd)
-					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
-					newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
-					n := newPos.ToPointTrunc()
+					// xd1 := (-fovHDeg / 2) + float64(x+0)*degPerPixel
+					// xd2 := (-fovHDeg / 2) + float64(x+1)*degPerPixel
+					// xd3 := (-fovHDeg / 2) + float64(x+2)*degPerPixel
+					// xd4 := (-fovHDeg / 2) + float64(x+3)*degPerPixel
+
+					// x = 0 -> 1, x = dx/2 -> 0, x = dx -> 1
+
+					// fudge := 1 - math.Sin(math.Pi*(float64(x)/float64(img.Rect.Dx())))
+					// fudge := math.Abs(float64(x)/float64(img.Rect.Dx()) - 0.5)
+					// fudge := math.Abs((float64(2*x) / float64(img.Rect.Dx())) - 1)
+
+					// if fovCorrection {
+					// 	fx := (float64(x) - (float64(img.Rect.Dx()) / 2)) / (float64(img.Rect.Dx()) / 2)
+					// 	// fy := (float64(y) - (float64(img.Rect.Dy()) / 2)) / (float64(img.Rect.Dy()) / 2)
+					// 	// xd += fx * fy * 0.05
+					// 	yd /= 1 + fx*0.0005
+					// 	// f := rand.Float64() * 1.
+
+					// 	// f := math.Sin(math.Pi * (float64(y) / float64(img.Rect.Dy())))
+
+					// 	// xd = f*float64(x)*degPerPixel + (-fovHDeg / 2)
+					// 	// yd = fy + float64(y)*degPerPixel + (-fovVDeg / 2)
+					// 	// yd *= 1 + 0.005*fudge
+					// 	// yd = yd - 0.01*fudge
+					// 	// yd = yd * (1 + 0.001*math.Sin(math.Pi*float64(x)/float64(img.Rect.Dx())))
+					// 	// yd = yd * (1 + -0.001*math.Abs(float64(x)/float64(img.Rect.Dx())-0.5))
+					// 	// yd = yd * (1 + -0.001*math.Abs(float64(x-(img.Rect.Dx()/2))/(float64(img.Rect.Dx())/2)))
+					// 	// yd = yd * (1 + -0.001*(float64(x)/float64(img.Rect.Dx())))
+					// }
+					// rayVec := viewVec.RotateY(yd).RotateZ(xd)
+					// rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+					rayVec := viewVec.RotateZ(xd).RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+					// rayVec1 := viewVec.RotateZ(xd1).RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+					// rayVec2 := viewVec.RotateZ(xd2).RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+					// rayVec3 := viewVec.RotateZ(xd3).RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+					// rayVec4 := viewVec.RotateZ(xd4).RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+
+					// rayStart := world.PlayerPos
+					// if fovCorrection {
+					// 	xOff := world.PlayerDir.ResetTheta().RotatePhi(90).ToCartesianVec3(xd * raySpacing)
+					// 	yOff := world.PlayerDir.ResetPhi().RotateTheta(90).ToCartesianVec3(yd * raySpacing)
+					// 	rayStart = world.PlayerPos.Add(yOff).Add(xOff)
+					// 	// rayVec = world.PlayerDir.ToCartesianVec3(2)
+					// }
+					// newPos := world.RayMarchSdf(rayStart, rayVec)
+
+					// newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
+					// n := newPos.ToPointTrunc()
 					// b, _ := world.Get(n)
 					// if b == nil {
 					// 	// End of map reached, stop looking.
 					// 	continue
 					// }
-					// img.Set(x, y, b.Color)
-					c, isSet := world.GetWithSubPos(n, newPos)
-					if !isSet {
-						// End of map reached, stop looking.
-						continue
+
+					b, _ := world.Get(world.RayMarchSdf(world.PlayerPos, rayVec).ToPointTrunc())
+					// b1, _ := world.Get(world.RayMarchSdf(world.PlayerPos, rayVec1).ToPointTrunc())
+					// b2, _ := world.Get(world.RayMarchSdf(world.PlayerPos, rayVec2).ToPointTrunc())
+					// b3, _ := world.Get(world.RayMarchSdf(world.PlayerPos, rayVec3).ToPointTrunc())
+					// b4, _ := world.Get(world.RayMarchSdf(world.PlayerPos, rayVec4).ToPointTrunc())
+
+					// c1 := color.RGBA{0, 0, 0, 0}
+					// c2 := color.RGBA{0, 0, 0, 0}
+					// c3 := color.RGBA{0, 0, 0, 0}
+					// c4 := color.RGBA{0, 0, 0, 0}
+
+					if b != nil {
+						img.SetRGBA(x+0, y, manualColor(b.Color))
 					}
-					img.Set(x, y, c)
+					// if b1 != nil {
+					// 	c1 = manualColor(b1.Color)
+					// }
+					// if b2 != nil {
+					// 	c2 = manualColor(b2.Color)
+					// }
+					// if b3 != nil {
+					// 	c3 = manualColor(b3.Color)
+					// }
+					// if b4 != nil {
+					// 	c4 = manualColor(b4.Color)
+					// }
+
+					// img.SetRGBA(x+0, y, c1)
+					// img.SetRGBA(x+1, y, c2)
+					// img.SetRGBA(x+2, y, c3)
+					// img.SetRGBA(x+3, y, c4)
+
+					// img.Set(x, y, b.Color)
+					// img.SetRGBA(x, y, color.RGBA{R: b.Color.R, G: b.Color.G, B: b.Color.B, A: b.Color.A})
+					// c := manualColor(b.Color)
+					// c := color.RGBAModel.Convert(b.Color).(color.RGBA)
+					// img.SetRGBA(x, y, c)
+					// c, isSet := world.GetWithSubPos(n, newPos)
+					// if !isSet {
+					// 	// End of map reached, stop looking.
+					// 	continue
+					// }
+					// img.Set(x, y, c)
+
+					// if fovCorrection {
+					// 	// c.R = uint8(255. * fudge)
+					// 	// c.R = uint8(float64(c.R) * fudge)
+					// c.R = uint8(utils.Clamp(float64(c.R), 0, 255))
+
+					// 	img.Set(x, y, c)
+					// }
 				}
 			}
 		}(t)
@@ -359,6 +471,9 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 	d.Dot = fixed.P(2, 24)
 	d.DrawString(fmt.Sprintf("Pos: %v Dir: %v ", world.PlayerPos, world.PlayerDir))
 	d.DrawString(fmt.Sprintf("Fov: %0.2f ", world.PlayerFovHDeg))
+	d.Dot = fixed.P(2, 36)
+	d.DrawString(fmt.Sprintf("Fov correction: %v ", fovCorrection))
+	d.DrawString(fmt.Sprintf("Ray spacing: %0.3f ", raySpacing))
 
 	// draw.Draw(img, img.Rect, depth, image.ZP, draw.Over)
 	// draw.DrawMask(img, img.Rect, image.NewUniform(color.NRGBA{R: 255, A: 64}), image.ZP, depth, image.ZP, draw.Over)
@@ -388,7 +503,11 @@ func main() {
 
 	window.MakeContextCurrent()
 
-	glfw.SwapInterval(1)
+	// window.SetInputMode(glfw.StickyKeysMode, 1)
+	window.SetInputMode(glfw.StickyKeysMode, 0)
+
+	glfw.SwapInterval(0)
+	// glfw.SwapInterval(1)
 
 	err = gl.Init()
 	if err != nil {
@@ -450,31 +569,31 @@ func main() {
 	// World setup
 	world := blockworld.NewBlockworld()
 	// err = maploader.LoadMap("./maps/AttackonDeuces.vxl", world)
-	// err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
+	err = maploader.LoadMap("./maps/DragonsReach.vxl", world)
 	// err = maploader.LoadMap("./maps/shigaichi4.vxl", world)
 	if err != nil {
 		panic(err)
 	}
 
-	fuwa, err := utils.LoadPNG("./assets/fuwa_64.png")
-	if err != nil {
-		panic(err)
-	}
-	moco, err := utils.LoadPNG("./assets/moco_64.png")
-	if err != nil {
-		panic(err)
-	}
-	world.SetBlockTex(fuwa, moco)
+	// fuwa, err := utils.LoadPNG("./assets/fuwa_64.png")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// moco, err := utils.LoadPNG("./assets/moco_64.png")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// world.SetBlockTex(fuwa, moco)
 
-	blockworld.GenerateLabyrinth(world, 19, 19)
+	// blockworld.GenerateLabyrinth(world, 19, 19)
 	// blockworld.GenerateLabyrinth(world, 31, 31)
 
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
 	// world.PlayerDir = blockworld.Angle3{Theta: 0, Phi: 0}
 
 	// Side view.
-	// world.PlayerPos = blockworld.Vec3{X: 190, Y: 310, Z: 33}
-	// world.PlayerDir = blockworld.Angle3{Theta: 95, Phi: 325}
+	world.PlayerPos = blockworld.Vec3{X: 190, Y: 310, Z: 33}
+	world.PlayerDir = blockworld.Angle3{Theta: 95, Phi: 325}
 
 	// Starting window.
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
@@ -487,11 +606,11 @@ func main() {
 	var frameCount int64 = 0
 	var lastFrame = time.Now()
 
-	solverState := &labsolver.LabSolver{}
+	// solverState := &labsolver.LabSolver{}
 
 	for !window.ShouldClose() {
 		handleInputs(window, world)
-		labsolver.Advance(world, solverState, frameCount)
+		// labsolver.Advance(world, solverState, frameCount)
 		audio.HandleAudio(audioCtx, world, frameCount)
 		renderBuf(img, world, frameCount, lastFrame)
 
