@@ -183,8 +183,8 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.ZP, draw.Src)
 
 	// depth buffer
-	depth := image.NewGray16(image.Rect(0, 0, img.Rect.Dx(), img.Rect.Dy()))
-	draw.Draw(depth, depth.Rect, image.NewUniform(color.Gray{Y: 0}), image.ZP, draw.Src)
+	// depth := image.NewGray16(image.Rect(0, 0, img.Rect.Dx(), img.Rect.Dy()))
+	// draw.Draw(depth, depth.Rect, image.NewUniform(color.Gray{Y: 0}), image.ZP, draw.Src)
 
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
 	fovHDeg := world.PlayerFovHDeg
@@ -218,19 +218,6 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64, 
 					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
 					_, c := world.RayMarchSdf(world.PlayerPos, rayVec)
 					img.Set(x, y, c)
-					// n := newPos.ToPointTrunc()
-					// b, _ := world.Get(n)
-					// if b == nil {
-					// 	// End of map reached, stop looking.
-					// 	continue
-					// }
-					// img.Set(x, y, b.Color)
-					// c, isSet := world.GetWithSubPos(n, newPos)
-					// if !isSet {
-					// 	// End of map reached, stop looking.
-					// 	continue
-					// }
-					// img.Set(x, y, c)
 				}
 			}
 		}(t)

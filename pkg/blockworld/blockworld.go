@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/pudelkoM/go-render/pkg/utils"
-
-	"github.com/s0rg/quadtree"
 )
 
 const blockSizePx = 25
@@ -338,7 +336,6 @@ func GetBlockFace(pos Vec3, block Point) int {
 type PresenceMap struct {
 	x, y, z int
 	present []uint8
-	tree    *quadtree.Tree[int]
 }
 
 func NewPresenceMap(x, y, z int) *PresenceMap {
@@ -347,7 +344,6 @@ func NewPresenceMap(x, y, z int) *PresenceMap {
 		x:       x,
 		y:       y,
 		z:       z,
-		tree:    quadtree.New[int](100.0, 100.0, 4),
 	}
 }
 
@@ -591,8 +587,15 @@ func (bw *Blockworld) RayMarchSdf(start, dir Vec3) (Vec3, color.Color) {
 	// if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
 	// 	fmt.Println("skip blocks", skipBlocks, "total skipped", totalSkippedBlocks)
 	// }
-	// return start
-	return start, color.NRGBA{R: uint8(iterations), G: uint8(iterations), B: uint8(iterations), A: 255}
+
+	b, _ := bw.Get(start.ToPointTrunc())
+	if b == nil {
+		// End of map reached, stop looking.
+		return start, color.NRGBA{R: 0, G: 0, B: 0, A: 0}
+	}
+
+	return start, b.Color
+	// return start, color.NRGBA{R: uint8(iterations), G: uint8(iterations), B: uint8(iterations), A: 255}
 }
 
 func (bw *Blockworld) ComputeShadows() {
