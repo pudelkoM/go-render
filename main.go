@@ -20,6 +20,9 @@ import (
 	"github.com/pudelkoM/go-render/pkg/blockworld"
 	"github.com/pudelkoM/go-render/pkg/maploader"
 	"github.com/pudelkoM/go-render/pkg/utils"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 )
 
 func init() {
@@ -88,7 +91,8 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	}
 }
 
-func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) {
+func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
+	lastFrame time.Time) {
 	// clear image
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.ZP, draw.Src)
 
@@ -180,22 +184,36 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64) 
 					isReflectionRay = true
 					rayVec = blockworld.Vec3{X: rayVec.X, Y: rayVec.Y, Z: -rayVec.Z}
 					newPos = newPos.Add(rayVec)
-					img.Set(x, img.Rect.Dy()-y, b.Color)
+					img.Set(x, y, b.Color)
 					continue
 				}
 				if isReflectionRay {
-					c1 := img.At(x, img.Rect.Dy()-y).(color.RGBA) // Color of the block we reflected off
+					c1 := img.At(x, y).(color.RGBA) // Color of the block we reflected off
 					c2 := b.Color
 					c1.A = 200
 					c := utils.CompositeNRGBA(c1, c2)
-					img.Set(x, img.Rect.Dy()-y, c)
+					img.Set(x, y, c)
 					break
 				}
-				img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+				img.Set(x, y, b.Color)
 				break
 			}
 		}
 	}
+
+	img.SetRGBA(img.Rect.Dx()/2, img.Rect.Dy()/2, color.RGBA{R: 255, A: 255})
+
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(color.RGBA{G: 255, A: 255}),
+		Face: basicfont.Face7x13,
+		Dot:  fixed.P(2, 12),
+	}
+	dt := time.Since(lastFrame)
+	d.DrawString(fmt.Sprintf("FPS: %03.0f ", 1/dt.Seconds()))
+	d.DrawString(fmt.Sprintf("Frame: %v ", frameCount))
+	d.Dot = fixed.P(2, 24)
+	d.DrawString(fmt.Sprintf("Pos: %v Dir: %v ", world.PlayerPos, world.PlayerDir))
 }
 
 func main() {
@@ -278,13 +296,15 @@ func main() {
 
 	for !window.ShouldClose() {
 		handleInputs(window, world)
-		renderBuf(img, world, frameCount)
+		renderBuf(img, world, frameCount, lastFrame)
 
 		gl.BindTexture(gl.TEXTURE_2D, texture)
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(w), int32(h), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
 
-		gl.BlitFramebuffer(0, 0, int32(w), int32(h), 0, 0, int32(w)*renderScale, int32(h)*renderScale, gl.COLOR_BUFFER_BIT, gl.NEAREST)
-
+		gl.BlitFramebuffer(
+			0, int32(h), int32(w), 0,
+			0, 0, int32(w)*renderScale, int32(h)*renderScale,
+			gl.COLOR_BUFFER_BIT, gl.NEAREST)
 		window.SwapBuffers()
 		glfw.PollEvents()
 
