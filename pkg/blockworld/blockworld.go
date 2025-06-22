@@ -334,8 +334,8 @@ func GetBlockFace(pos Vec3, block Point) int {
 }
 
 type Block struct {
-	Color                  color.NRGBA
-	IsSet                  bool // a zero-value block is not set, i.e. air
+	Color                  color.NRGBA // Color palletting?
+	IsSet                  bool        // a zero-value block is not set, i.e. air
 	Reflective             bool
 	DistanceToNearestBlock int16
 	IsLightSource          bool
@@ -352,6 +352,49 @@ type Blockworld struct {
 
 	blockTex1 *image.NRGBA
 	blockTex2 *image.NRGBA
+}
+
+func transform(x_, y_, z_ int) (uint32, uint32, uint32) {
+	x := uint32(x_)
+	y := uint32(y_)
+	z := uint32(z_)
+
+	const mask_2_bits = 0b11
+	const mask_3_bits = 0b111
+	const mask_4_bits = 0b1111
+	const mask_8_bits = 0b11111111
+	const mask_upper_24_bits = 0xFFFFFF00
+	const mask_upper_28_bits = 0xFFFFFFF0
+	const mask_upper_29_bits = 0xFFFFFFF8
+	const mask_upper_30_bits = 0xFFFFFFFC
+
+	// ComputeShadows took 1.095028125s
+	// ComputeNearestBlocks took 379.377125ms
+	u := (x & mask_upper_24_bits) | ((x & mask_3_bits) << 0) | ((y & mask_3_bits) << 3) | ((z & mask_2_bits) << 6)
+	v := (y & mask_upper_29_bits) | ((x >> 3) & mask_3_bits)
+	t := (z & mask_upper_30_bits) | ((x >> 6) & mask_2_bits)
+
+	// ComputeShadows took 1.075667375s
+	// ComputeNearestBlocks took 443.634584ms
+	// u := (x & mask_upper_24_bits) | ((x & mask_4_bits) << 0) | ((y & mask_4_bits) << 4)
+	// v := (y & mask_upper_28_bits) | ((x >> 4) & mask_4_bits)
+	// t := z
+
+	// ComputeShadows took 1.065404084s
+	// ComputeNearestBlocks took 449.814083ms
+	// u := x
+	// v := y
+	// t := z
+
+	// // Collect the lower 2 bits of all coordinates into a single value
+	// u := ((x & mask_2_bits) << 0) | ((y & mask_2_bits) << 2) | ((z & mask_2_bits) << 4)
+
+	// // Collect the next 4 bits of all coordinates into a single value
+	// v := ((x>>4)&mask_4_bits)<<0 | ((y>>4)&mask_4_bits)<<4 | ((z>>4)&mask_4_bits)<<8
+
+	// t := ((x>>8)&mask_8_bits)<<0 | ((y>>8)&mask_8_bits)<<8 | ((z>>8)&mask_8_bits)<<16
+
+	return uint32(u), uint32(v), uint32(t)
 }
 
 func NewBlockworld() *Blockworld {
@@ -419,11 +462,38 @@ func (bw *Blockworld) Blocks() []Block {
 	return bw.blocks
 }
 
-func (bw *Blockworld) Get(p Point) (*Block, bool) {
+func (bw *Blockworld) Get2(p Point) (*Block, bool) {
 	if p.X < 0 || p.X >= bw.x || p.Y < 0 || p.Y >= bw.y || p.Z < 0 || p.Z >= bw.z {
 		return nil, false
 	}
 	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
+	return b, b.IsSet
+}
+
+func (bw *Blockworld) Get(p Point) (*Block, bool) {
+	if p.X < 0 || p.X >= bw.x || p.Y < 0 || p.Y >= bw.y || p.Z < 0 || p.Z >= bw.z {
+		return nil, false
+	}
+
+	u, v, t := transform(p.X, p.Y, p.Z)
+
+	// const mask_2_bits = 0b11
+	// const mask_4_bits = 0b1111
+	// const mask_8_bits = 0b11111111
+
+	// x := uint16(p.X)
+	// y := uint16(p.Y)
+	// z := uint16(p.Z)
+
+	// // Collect the lower 2 bits of all coordinates into a single value
+	// u := ((x & mask_2_bits) << 0) | ((y & mask_2_bits) << 2) | ((z & mask_2_bits) << 4)
+
+	// // Collect the next 4 bits of all coordinates into a single value
+	// v := ((x>>4)&mask_4_bits)<<0 | ((y>>4)&mask_4_bits)<<2 | ((z>>4)&mask_4_bits)<<4
+
+	// t := ((x>>8)&mask_8_bits)<<0 | ((y>>8)&mask_8_bits)<<2 | ((z>>8)&mask_8_bits)<<4
+
+	b := &bw.blocks[u+v*uint32(bw.x)+t*uint32(bw.x)*uint32(bw.y)]
 	return b, b.IsSet
 }
 
@@ -464,7 +534,7 @@ func (bw *Blockworld) GetWithSubPos(p Point, intersect Vec3) (color.Color, bool)
 	return b.Color, b.IsSet
 }
 
-func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
+func (bw *Blockworld) GetRaw2(x, y, z int) (*Block, bool) {
 	if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
 		return nil, false
 	}
@@ -474,11 +544,65 @@ func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
 	return b, b.IsSet
 }
 
-func (bw *Blockworld) Set(x, y, z int, b Block) {
+func (bw *Blockworld) GetRaw(x_, y_, z_ int) (*Block, bool) {
+	if (x_ < 0 || x_ >= bw.x) || (y_ < 0 || y_ >= bw.y) || (z_ < 0 || z_ >= bw.z) {
+		return nil, false
+	}
+
+	u, v, t := transform(x_, y_, z_)
+
+	// const mask_2_bits = 0b11
+	// const mask_4_bits = 0b1111
+	// const mask_8_bits = 0b11111111
+
+	// x := uint16(x_)
+	// y := uint16(y_)
+	// z := uint16(z_)
+
+	// // Collect the lower 2 bits of all coordinates into a single value
+	// u := ((x & mask_2_bits) << 0) | ((y & mask_2_bits) << 2) | ((z & mask_2_bits) << 4)
+
+	// // Collect the next 4 bits of all coordinates into a single value
+	// v := ((x>>4)&mask_4_bits)<<0 | ((y>>4)&mask_4_bits)<<2 | ((z>>4)&mask_4_bits)<<4
+
+	// t := ((x>>8)&mask_8_bits)<<0 | ((y>>8)&mask_8_bits)<<2 | ((z>>8)&mask_8_bits)<<4
+
+	b := &bw.blocks[u+v*uint32(bw.x)+t*uint32(bw.x)*uint32(bw.y)]
+
+	return b, b.IsSet
+}
+
+func (bw *Blockworld) Set2(x, y, z int, b Block) {
 	if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
 		return
 	}
 	bw.blocks[x+y*bw.x+z*bw.x*bw.y] = b
+}
+
+func (bw *Blockworld) Set(x_, y_, z_ int, b Block) {
+	if (x_ < 0 || x_ >= bw.x) || (y_ < 0 || y_ >= bw.y) || (z_ < 0 || z_ >= bw.z) {
+		return
+	}
+
+	u, v, t := transform(x_, y_, z_)
+
+	// const mask_2_bits = 0b11
+	// const mask_4_bits = 0b1111
+	// const mask_8_bits = 0b11111111
+
+	// x := uint16(x_)
+	// y := uint16(y_)
+	// z := uint16(z_)
+
+	// // Collect the lower 2 bits of all coordinates into a single value
+	// u := ((x & mask_2_bits) << 0) | ((y & mask_2_bits) << 2) | ((z & mask_2_bits) << 4)
+
+	// // Collect the next 4 bits of all coordinates into a single value
+	// v := ((x>>4)&mask_4_bits)<<0 | ((y>>4)&mask_4_bits)<<2 | ((z>>4)&mask_4_bits)<<4
+
+	// t := ((x>>8)&mask_8_bits)<<0 | ((y>>8)&mask_8_bits)<<2 | ((z>>8)&mask_8_bits)<<4
+
+	bw.blocks[u+v*uint32(bw.x)+t*uint32(bw.x)*uint32(bw.y)] = b
 }
 
 func (bw *Blockworld) CreateLightBlock(x, y, z int) {
