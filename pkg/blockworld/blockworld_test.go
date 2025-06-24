@@ -256,6 +256,26 @@ func BenchmarkMapIter(b *testing.B) {
 				}
 			}
 		})
+		b.Run(m+"-GetRaw", func(b *testing.B) {
+			world := blockworld.NewBlockworld()
+			err := maploader.LoadMap(m, world)
+			if err != nil {
+				panic(err)
+			}
+			count := 0
+			mx, my, mz := world.GetSize()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for z := range mz {
+					for y := range my {
+						for x := range mx {
+							_, _ = world.GetRaw(x, y, z)
+							count++
+						}
+					}
+				}
+			}
+		})
 	}
 }
 
