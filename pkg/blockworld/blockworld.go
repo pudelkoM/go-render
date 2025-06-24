@@ -391,10 +391,60 @@ func (pm *PresenceMap) FromBlockworld(bw *Blockworld) {
 
 type Block struct {
 	Color                  color.NRGBA
-	IsSet                  bool // a zero-value block is not set, i.e. air
-	Reflective             bool
+	flags                  uint8
 	DistanceToNearestBlock int16
-	IsLightSource          bool
+}
+
+func CreateBlockFlags(isSet, isLightSource, isReflective bool) uint8 {
+	var flags uint8
+	if isSet {
+		flags |= 0x01 // Set bit 0 for IsSet
+	}
+	if isLightSource {
+		flags |= 0x02 // Set bit 1 for IsLightSource
+	}
+	if isReflective {
+		flags |= 0x04 // Set bit 2 for IsReflective
+	}
+	return flags
+}
+
+func (b *Block) IsSet() bool {
+	return b.flags&0x01 != 0
+}
+
+func (b *Block) SetIsSet(isSet bool) *Block {
+	if isSet {
+		b.flags |= 0x01
+	} else {
+		b.flags &^= 0x01
+	}
+	return b
+}
+func (b *Block) IsLightSource() bool {
+	return b.flags&0x02 != 0
+}
+
+func (b *Block) SetIsLightSource(isLightSource bool) *Block {
+	if isLightSource {
+		b.flags |= 0x02
+	} else {
+		b.flags &^= 0x02
+	}
+	return b
+}
+
+func (b *Block) IsReflective() bool {
+	return b.flags&0x04 != 0
+}
+
+func (b *Block) SetIsReflective(isReflective bool) *Block {
+	if isReflective {
+		b.flags |= 0x04
+	} else {
+		b.flags &^= 0x04
+	}
+	return b
 }
 
 type Blockworld struct {
@@ -488,7 +538,7 @@ func (bw *Blockworld) Get(p Point) (*Block, bool) {
 		return nil, false
 	}
 	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
-	return b, b.IsSet
+	return b, b.IsSet()
 }
 
 func (bw *Blockworld) GetWithSubPos(p Point, intersect Vec3) (color.Color, bool) {
@@ -497,11 +547,11 @@ func (bw *Blockworld) GetWithSubPos(p Point, intersect Vec3) (color.Color, bool)
 	}
 
 	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
-	if !b.IsSet {
+	if !b.IsSet() {
 		return color.NRGBA{}, false
 	}
 	if bw.blockTex1 == nil || bw.blockTex2 == nil {
-		return b.Color, b.IsSet
+		return b.Color, b.IsSet()
 	}
 
 	_, fracX := math.Modf(intersect.X)
@@ -514,18 +564,18 @@ func (bw *Blockworld) GetWithSubPos(p Point, intersect Vec3) (color.Color, bool)
 
 	if epsilonEqual(fracX, 0) || epsilonEqual(fracX, 1) {
 		c := bw.blockTex1.At(int((fracY)*float64(bw.blockTex1.Bounds().Dx())), int(fracZ*float64(bw.blockTex1.Bounds().Dy())))
-		return c, b.IsSet
+		return c, b.IsSet()
 	}
 	if epsilonEqual(fracY, 0) || epsilonEqual(fracY, 1) {
 		c := bw.blockTex2.At(int(fracX*float64(bw.blockTex2.Bounds().Dx())), int(fracZ*float64(bw.blockTex2.Bounds().Dy())))
-		return c, b.IsSet
+		return c, b.IsSet()
 	}
 	// if epsilonEqual(fracZ, 0) || epsilonEqual(fracZ, 1) {
 	// 	c := bw.blockTex2.At(int(fracX*float64(bw.blockTex2.Bounds().Dx())), int(fracY*float64(bw.blockTex2.Bounds().Dy())))
-	// 	return c, b.IsSet
+	// 	return c, b.IsSet()
 	// }
 
-	return b.Color, b.IsSet
+	return b.Color, b.IsSet()
 }
 
 func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
@@ -535,7 +585,7 @@ func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
 	b := &bw.blocks[x+y*bw.x+z*bw.x*bw.y]
 	// b := &bw.blocks[z+y*bw.z+x*bw.z*bw.y]
 
-	return b, b.IsSet
+	return b, b.IsSet()
 }
 
 func (bw *Blockworld) Set(x, y, z int, b Block) {
@@ -547,13 +597,13 @@ func (bw *Blockworld) Set(x, y, z int, b Block) {
 
 func (bw *Blockworld) CreateLightBlock(x, y, z int) {
 	b, _ := bw.GetRaw(x, y, z)
-	b.IsLightSource = true
-	b.IsSet = true
+	b.SetIsLightSource(true)
+	b.SetIsSet(true)
 	b.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 	bw.Lights = append(bw.Lights, Point{X: x, Y: y, Z: z})
 }
 
-func (bw *Blockworld) RayMarchSdf(start, dir Vec3) (Vec3, color.Color) {
+func (bw *Blockworld) RayMarchSdf(start, dir Vec3) (Vec3, color.NRGBA) {
 	// skipBlocks := []int16{}
 	// totalSkippedBlocks := 0
 	iterations := 0
@@ -568,7 +618,7 @@ func (bw *Blockworld) RayMarchSdf(start, dir Vec3) (Vec3, color.Color) {
 			break
 		}
 		// bc, _ := bw.Get(start.ToPointTrunc())
-		// if bc == nil || bc.IsSet || bc.IsLightSource {
+		// if bc == nil || bc.IsSet() || bc.IsLightSource(){
 		// 	break
 		// }
 		if d <= 4 {
@@ -606,18 +656,18 @@ func (bw *Blockworld) ComputeShadows() {
 	l = l.Add(Vec3{X: 0.5, Y: 0.5, Z: 0.5})
 
 	// lb, _ := bw.Get(l)
-	// lb.IsSet = false
-	// defer func() { lb.IsSet = true }()
+	// lb.IsSet() = false
+	// defer func() { lb.IsSet() = true }()
 
 	for z := 0; z < bw.z; z++ {
 		for y := 0; y < bw.y; y++ {
 			for x := 0; x < bw.x; x++ {
 				b, _ := bw.GetRaw(x, y, z)
-				if !b.IsSet || b.IsLightSource {
+				if !b.IsSet() || b.IsLightSource() {
 					continue
 				}
 
-				b.IsSet = false
+				b.SetIsSet(false)
 
 				c := Point{X: x, Y: y, Z: z}.ToVec3().Add(Vec3{X: 0.5, Y: 0.5, Z: 1})
 				// rayVec := l.ToVec3().Add(Vec3{X: 0.5, Y: 0.5, Z: 0.5}).Sub(c).Normalize()
@@ -626,7 +676,7 @@ func (bw *Blockworld) ComputeShadows() {
 				newPos, _ := bw.RayMarchSdf(c, rayVec)
 
 				b2, _ := bw.Get(newPos.ToPointTrunc())
-				if b2 != nil && b2.IsLightSource {
+				if b2 != nil && b2.IsLightSource() {
 					// b.Color = color.NRGBA{R: 200, G: 0, B: 0, A: 255}
 				} else {
 					// Block is in shadow
@@ -642,7 +692,7 @@ func (bw *Blockworld) ComputeShadows() {
 				// 	fmt.Println("b2", b2)
 				// }
 
-				b.IsSet = true
+				b.SetIsSet(true)
 			}
 		}
 	}
@@ -657,7 +707,7 @@ func (world *Blockworld) ComputeNearestBlocks() {
 			for x := 0; x < world.x; x++ {
 				d++
 				b, _ := world.GetRaw(x, y, z)
-				if b.IsSet {
+				if b.IsSet() {
 					d = 0
 					continue
 				}
@@ -672,7 +722,7 @@ func (world *Blockworld) ComputeNearestBlocks() {
 			for x := world.x - 1; x >= 0; x-- {
 				d++
 				b, _ := world.GetRaw(x, y, z)
-				if b.IsSet {
+				if b.IsSet() {
 					d = 0
 					continue
 				}
@@ -693,7 +743,7 @@ func (world *Blockworld) ComputeNearestBlocks() {
 			for y := 0; y < world.y; y++ {
 				d++
 				b, _ := world.GetRaw(x, y, z)
-				if b.IsSet {
+				if b.IsSet() {
 					d = 0
 					continue
 				}
@@ -708,7 +758,7 @@ func (world *Blockworld) ComputeNearestBlocks() {
 			for y := world.y - 1; y >= 0; y-- {
 				d++
 				b, _ := world.GetRaw(x, y, z)
-				if b.IsSet {
+				if b.IsSet() {
 					d = 0
 					continue
 				}
@@ -729,7 +779,7 @@ func (world *Blockworld) ComputeNearestBlocks() {
 			for z := 0; z < world.z; z++ {
 				d++
 				b, _ := world.GetRaw(x, y, z)
-				if b.IsSet {
+				if b.IsSet() {
 					d = 0
 					continue
 				}
@@ -744,7 +794,7 @@ func (world *Blockworld) ComputeNearestBlocks() {
 			for z := world.z - 1; z >= 0; z-- {
 				d++
 				b, _ := world.GetRaw(x, y, z)
-				if b.IsSet {
+				if b.IsSet() {
 					d = 0
 					continue
 				}

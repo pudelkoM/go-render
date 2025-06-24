@@ -44,11 +44,13 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 						A: uint8(c&0xFF) + 80,
 						// A: 255,
 					}
-					world.Set(x, y, z, blockworld.Block{
-						Color:      col,
-						Reflective: z == 0,
-						IsSet:      true,
-					})
+					b := blockworld.Block{
+						Color: col,
+					}
+					b.SetIsReflective(z == 0)
+					b.SetIsSet(true)
+
+					world.Set(x, y, z, b)
 				}
 			}
 		}

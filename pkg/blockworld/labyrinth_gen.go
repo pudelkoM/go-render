@@ -34,7 +34,7 @@ func GenerateLabyrinth(world *Blockworld, x, y int) {
 			// Floor
 			world.Set(x, y, floor_z-1, Block{
 				Color: grayWithVariation(40, 10),
-				IsSet: true,
+				flags: CreateBlockFlags(true, false, false),
 			})
 
 			// // Ceiling
@@ -46,7 +46,7 @@ func GenerateLabyrinth(world *Blockworld, x, y int) {
 			// Walls
 			world.Set(x, y, floor_z, Block{
 				Color: grayWithVariation(100, 50),
-				IsSet: true,
+				flags: CreateBlockFlags(true, false, false),
 			})
 		}
 	}
@@ -58,7 +58,7 @@ func GenerateLabyrinth(world *Blockworld, x, y int) {
 	// Set goal point
 	world.Set(startX, startY, floor_z-1, Block{
 		Color: color.NRGBA{R: 255, G: 0, B: 0, A: 255},
-		IsSet: true,
+		flags: CreateBlockFlags(true, false, false),
 	})
 	fmt.Printf("Goal point: (%d, %d)\n", startX, startY)
 
@@ -69,7 +69,7 @@ func GenerateLabyrinth(world *Blockworld, x, y int) {
 		if !isSet {
 			world.Set(spawnX, spawnY, floor_z-1, Block{
 				Color: color.NRGBA{R: 0, G: 255, B: 0, A: 255},
-				IsSet: true,
+				flags: CreateBlockFlags(true, false, false),
 			})
 
 			fmt.Printf("Spawn point: (%d, %d)\n", spawnX, spawnY)
@@ -102,7 +102,7 @@ func carvePath(world *Blockworld, x, y int) {
 
 	// Mark the current cell as a path
 	world.Set(x, y, floor_z, Block{
-		IsSet: false,
+		flags: CreateBlockFlags(true, false, false),
 	})
 
 	// Explore each direction
@@ -113,7 +113,7 @@ func carvePath(world *Blockworld, x, y int) {
 		if ny > 0 && ny < maxY-1 && nx > 0 && nx < maxX-1 && isSet {
 			// Carve a path to the next cell
 			world.Set(x+dir.dx/2, y+dir.dy/2, floor_z, Block{
-				IsSet: false,
+				flags: CreateBlockFlags(true, false, false),
 			})
 			carvePath(world, nx, ny)
 		}

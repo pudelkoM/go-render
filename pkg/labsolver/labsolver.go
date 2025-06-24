@@ -9,15 +9,15 @@ import (
 )
 
 func blockIsGoal(b blockworld.Block) bool {
-	return b.IsSet && b.Color.R == 255 && b.Color.G == 0 && b.Color.B == 0
+	return b.IsSet() && b.Color.R == 255 && b.Color.G == 0 && b.Color.B == 0
 }
 
 func blockIsWall(b blockworld.Block) bool {
-	return b.IsSet && !blockIsGoal(b)
+	return b.IsSet() && !blockIsGoal(b)
 }
 
 func blockIsPath(b blockworld.Block) bool {
-	return !b.IsSet
+	return !b.IsSet()
 }
 
 func isAt90Degrees(angle float64) bool {

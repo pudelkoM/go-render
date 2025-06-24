@@ -34,6 +34,21 @@ func ColorDarken(c color.NRGBA, factor float64) color.NRGBA {
 	return c
 }
 
+func ColorSimilar(c1, c2 color.NRGBA, f float64) bool {
+	if f < 0 || f > 1 {
+		panic("factor must be between 0 and 1")
+	}
+
+	rDiff := math.Abs(float64(c1.R) - float64(c2.R))
+	gDiff := math.Abs(float64(c1.G) - float64(c2.G))
+	bDiff := math.Abs(float64(c1.B) - float64(c2.B))
+	aDiff := math.Abs(float64(c1.A) - float64(c2.A))
+
+	maxDiff := 255.0 * f
+
+	return rDiff <= maxDiff && gDiff <= maxDiff && bDiff <= maxDiff && aDiff <= maxDiff
+}
+
 func AlmostEqual(f1, f2 float64) bool {
 	const epsilon = 1e-6
 	return math.Abs(f1-f2) < epsilon
