@@ -287,6 +287,24 @@ func NewBlockworld() *Blockworld {
 	}
 }
 
+func (bw *Blockworld) RandomFill(fillPerc float64) {
+	for i := range bw.blocks {
+		if rand.Float64() < fillPerc {
+			bw.blocks[i] = Block{
+				Color: color.NRGBA{
+					R: uint8(rand.Intn(256)),
+					G: uint8(rand.Intn(256)),
+					B: uint8(rand.Intn(256)),
+					A: 255,
+				},
+				IsSet: true,
+			}
+		} else {
+			bw.blocks[i] = Block{}
+		}
+	}
+}
+
 func (bw *Blockworld) Randomize() {
 	const worldSize = 40
 	colors := []color.NRGBA{

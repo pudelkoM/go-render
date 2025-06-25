@@ -1,9 +1,11 @@
 package blockworld_test
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"math"
+	"math/rand"
 	"testing"
 
 	"github.com/pudelkoM/go-render/pkg/blockworld"
@@ -298,4 +300,42 @@ func BenchmarkWorldGetBlock(b *testing.B) {
 			world.Get(p)
 		}
 	})
+}
+
+func BenchmarkTraverseBlockWorld(b *testing.B) {
+	for _, f := range []float64{0, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 1} {
+		b.Run(fmt.Sprintf("TraverseBlockWorld-%v", f), func(b *testing.B) {
+			world := blockworld.NewBlockworld()
+			dx, dy, dz := 512, 512, 512
+			world.SetSize(dx, dy, dz)
+			world.RandomFill(f)
+			x := rand.Intn(dx)
+			y := rand.Intn(dy)
+			z := rand.Intn(dz)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				// Access random location
+				_, _ = world.GetRaw(x, y, z)
+				x = (x + 1) % dx
+				y = (y - 1) % dy
+				z = (z + 2) % dz
+
+				// for z := 0; z < dz; z++ {
+				// 	for y := 0; y < dy; y++ {
+				// 		for x := 0; x < dx; x++ {
+				// 			_, _ = world.GetRaw(x, y, z) // Accessing each block
+				// 		}
+				// 	}
+				// }
+
+				// _, _ = world.GetRaw(i%dx, i%dy, i%dz) // Accessing random blocks
+				// _, _ = world.GetRaw((i+1)%dx, i%dy, (i+1)%dz)
+				// _, _ = world.GetRaw((i+2)%dx, i%dy, i%dz)
+				// _, _ = world.GetRaw((i+3)%dx, i%dy, (i-1)%dz)
+				// _, _ = world.GetRaw((i+3)%dx, (i+1)%dy, i%dz)
+				// _, _ = world.GetRaw((i+3)%dx, (i+2)%dy, (i+1)%dz)
+				// _, _ = world.GetRaw((i+3)%dx, (i+3)%dy, i%dz)
+			}
+		})
+	}
 }
