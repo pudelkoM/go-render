@@ -105,7 +105,7 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 }
 
 func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
-	lastFrame time.Time) {
+	lastFrameDuration time.Duration) {
 	// clear image
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
 
@@ -232,8 +232,7 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 		Face: basicfont.Face7x13,
 		Dot:  fixed.P(2, 12),
 	}
-	dt := time.Since(lastFrame)
-	d.DrawString(fmt.Sprintf("FPS: %03.0f ", 1/dt.Seconds()))
+	d.DrawString(fmt.Sprintf("FPS: %03.0f ", 1/lastFrameDuration.Seconds()))
 	d.DrawString(fmt.Sprintf("Frame: %v ", frameCount))
 	d.Dot = fixed.P(2, 24)
 	d.DrawString(fmt.Sprintf("Pos: %v Dir: %v ", world.PlayerPos, world.PlayerDir))
@@ -317,10 +316,14 @@ func main() {
 
 	var frameCount int64 = 0
 	var lastFrame = time.Now()
+	var lastFrameDuration time.Duration = 0
+	// For stats printing only.
+	var lastFrameCount int64 = 0
+	var lastFrameTime = time.Now()
 
 	for !window.ShouldClose() {
 		handleInputs(window, world)
-		renderBuf(img, world, frameCount, lastFrame)
+		renderBuf(img, world, frameCount, lastFrameDuration)
 
 		gl.BindTexture(gl.TEXTURE_2D, texture)
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(w), int32(h), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
@@ -332,12 +335,18 @@ func main() {
 		window.SwapBuffers()
 		glfw.PollEvents()
 
-		frameCount++
-		took := time.Since(lastFrame)
-		if frameCount%60 == 0 {
-			fmt.Println("Frametime", took, "FPS", 1/took.Seconds())
+		if lastFrame.Sub(lastFrameTime) > time.Second {
+			deltaFrames := frameCount - lastFrameCount
+			deltaTime := time.Since(lastFrameTime)
+			fps := float64(deltaFrames) / deltaTime.Seconds()
+			avgFrameTime := deltaTime / time.Duration(deltaFrames)
+			fmt.Println("Frametime", avgFrameTime, "FPS", fps)
 			fmt.Println("PlayerPos", world.PlayerPos, "PlayerDir", world.PlayerDir)
+			lastFrameCount = frameCount
+			lastFrameTime = lastFrame
 		}
+		frameCount++
+		lastFrameDuration = time.Since(lastFrame)
 		lastFrame = time.Now()
 	}
 }
