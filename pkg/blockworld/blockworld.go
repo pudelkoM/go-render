@@ -196,6 +196,14 @@ func (v Vec3) Normalize() Vec3 {
 	}
 }
 
+func (v Vec3) Clamp(min, max float64) Vec3 {
+	return Vec3{
+		X: math.Max(min, math.Min(max, v.X)),
+		Y: math.Max(min, math.Min(max, v.Y)),
+		Z: math.Max(min, math.Min(max, v.Z)),
+	}
+}
+
 func (v Vec3) ToNearestPoint() Point {
 	return Point{
 		X: int(math.Round(v.X)),
