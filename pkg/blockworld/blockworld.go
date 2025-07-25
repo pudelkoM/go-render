@@ -349,16 +349,17 @@ func (bw *Blockworld) Blocks() []Block {
 }
 
 func (bw *Blockworld) Get(p Point) (*Block, bool) {
-	// if (p.X < 0 || p.X >= bw.x) || (p.Y < 0 || p.Y >= bw.y) || (p.Z < 0 || p.Z >= bw.z) {
-	// 	return nil, false
-	// }
-	// b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
-	// return b, b.IsSet
-
 	// return bw.svt.Get(p.X, p.Y, p.Z)
 	// return bw.svt.GetArr(p.X, p.Y, p.Z)
-	return bw.svt.GetArrBigNode(p.X, p.Y, p.Z)
+	// return bw.svt.GetMapToBigNode(p.X, p.Y, p.Z)
+	// return bw.svt.GetArrBigNode(p.X, p.Y, p.Z)
 	// return bw.svt.GetWithCache(p.X, p.Y, p.Z)
+
+	if (p.X < 0 || p.X >= bw.x) || (p.Y < 0 || p.Y >= bw.y) || (p.Z < 0 || p.Z >= bw.z) {
+		return nil, false
+	}
+	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
+	return b, b.IsSet
 }
 
 func (bw *Blockworld) GetFlatArray(x, y, z int) (*Block, bool) {
@@ -370,17 +371,17 @@ func (bw *Blockworld) GetFlatArray(x, y, z int) (*Block, bool) {
 }
 
 func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
-	// if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
-	// 	return nil, false
-	// }
-	// b := &bw.blocks[x+y*bw.x+z*bw.x*bw.y]
-	// return b, b.IsSet
-
 	// return bw.svt.Get(x, y, z)
 	// return bw.svt.GetArr(x, y, z)
-
-	return bw.svt.GetArrBigNode(x, y, z)
+	// return bw.svt.GetMapToBigNode(x, y, z)
+	// return bw.svt.GetArrBigNode(x, y, z)
 	// return bw.svt.GetWithCache(x, y, z)
+
+	if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
+		return nil, false
+	}
+	b := &bw.blocks[x+y*bw.x+z*bw.x*bw.y]
+	return b, b.IsSet
 }
 
 func (bw *Blockworld) Set(x, y, z int, b Block) {
@@ -391,8 +392,9 @@ func (bw *Blockworld) Set(x, y, z int, b Block) {
 	bw.blocks[x+y*bw.x+z*bw.x*bw.y] = b
 
 	b.IsSet = true
-	// bw.svt.Set(x, y, z, b)
+	bw.svt.Set(x, y, z, b)
 	bw.svt.SetArr(x, y, z, b)
+	bw.svt.SetMapToBigNode(x, y, z, b)
 }
 
 func (bw *Blockworld) GetJustRangeCheck(x, y, z int) (*Block, bool) {
