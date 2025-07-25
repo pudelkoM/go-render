@@ -13,13 +13,13 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/pudelkoM/go-render/pkg/blockworld"
 	"github.com/pudelkoM/go-render/pkg/maploader"
-	"github.com/pudelkoM/go-render/pkg/utils"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
@@ -31,8 +31,14 @@ func init() {
 	runtime.LockOSThread()
 }
 
+const (
+	renderNormal = iota
+	renderDepth
+)
+
 var (
-	mapIndex = 0
+	mapIndex   = 0
+	renderMode = renderNormal
 )
 
 func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
@@ -89,117 +95,134 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 			panic(err)
 		}
 	}
+	if w.GetKey(glfw.KeyL) == glfw.Press {
+		if renderMode == renderNormal {
+			renderMode = renderDepth
+		} else {
+			renderMode = renderNormal
+		}
+	}
 }
 
 func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 	lastFrame time.Time) {
 	// clear image
-	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.ZP, draw.Src)
+	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
 
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
 	fovHDeg := 55.
 	fovVDeg := fovHDeg * imgRatio
 	degPerPixel := fovHDeg / float64(img.Rect.Dx())
 
-	for y := 0; y < img.Rect.Dy(); y++ {
-		yd := (-fovVDeg / 2) + float64(y)*degPerPixel
-		for x := 0; x < img.Rect.Dx(); x++ {
-			xd := (-fovHDeg / 2) + float64(x)*degPerPixel
-			viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
-			rayVec := viewVec.RotateY(yd).RotateZ(xd)
-			rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
-			newPos := world.PlayerPos
-			isReflectionRay := false
-
-			stepX := 0
-			tDeltaX := 0.0
-			tMaxX := 0.0
-			if rayVec.X > 0 {
-				stepX = 1
-				tDeltaX = 1 / rayVec.X
-				tMaxX = (math.Floor(newPos.X+1) - newPos.X) / rayVec.X
-			} else if rayVec.X < 0 {
-				stepX = -1
-				tDeltaX = 1 / -rayVec.X
-				tMaxX = (math.Ceil(newPos.X-1) - newPos.X) / rayVec.X
-			} else {
-				tMaxX = math.Inf(1)
+	const threads = 8
+	yDD := int(math.Ceil(float64(img.Rect.Dy()) / threads))
+	wg := sync.WaitGroup{}
+	wg.Add(threads)
+	for t := 0; t < threads; t++ {
+		go func(t int) {
+			defer wg.Done()
+			yStart := t * yDD
+			if yStart >= img.Rect.Dy() {
+				return
+			}
+			yEnd := (t + 1) * yDD
+			if yEnd >= img.Rect.Dy() {
+				yEnd = img.Rect.Dy()
 			}
 
-			stepY := 0
-			tDeltaY := 0.0
-			tMaxY := 0.0
-			if rayVec.Y > 0 {
-				stepY = 1
-				tDeltaY = 1 / rayVec.Y
-				tMaxY = (math.Floor(newPos.Y+1) - newPos.Y) / rayVec.Y
-			} else if rayVec.Y < 0 {
-				stepY = -1
-				tDeltaY = 1 / -rayVec.Y
-				tMaxY = (math.Ceil(newPos.Y-1) - newPos.Y) / rayVec.Y
-			} else {
-				tMaxY = math.Inf(1)
+			for y := yStart; y < yEnd; y++ {
+				yd := (-fovVDeg / 2) + float64(y)*degPerPixel
+				for x := 0; x < img.Rect.Dx(); x++ {
+					xd := (-fovHDeg / 2) + float64(x)*degPerPixel
+					viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
+					rayVec := viewVec.RotateY(yd).RotateZ(xd)
+					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+					newPos := world.PlayerPos
+
+					stepX := 0
+					tDeltaX := 0.0
+					tMaxX := 0.0
+					if rayVec.X > 0 {
+						stepX = 1
+						tDeltaX = 1 / rayVec.X
+						tMaxX = (math.Floor(newPos.X+1) - newPos.X) / rayVec.X
+					} else if rayVec.X < 0 {
+						stepX = -1
+						tDeltaX = 1 / -rayVec.X
+						tMaxX = (math.Ceil(newPos.X-1) - newPos.X) / rayVec.X
+					} else {
+						tMaxX = math.Inf(1)
+					}
+
+					stepY := 0
+					tDeltaY := 0.0
+					tMaxY := 0.0
+					if rayVec.Y > 0 {
+						stepY = 1
+						tDeltaY = 1 / rayVec.Y
+						tMaxY = (math.Floor(newPos.Y+1) - newPos.Y) / rayVec.Y
+					} else if rayVec.Y < 0 {
+						stepY = -1
+						tDeltaY = 1 / -rayVec.Y
+						tMaxY = (math.Ceil(newPos.Y-1) - newPos.Y) / rayVec.Y
+					} else {
+						tMaxY = math.Inf(1)
+					}
+
+					stepZ := 0
+					tDeltaZ := 0.0
+					tMaxZ := 0.0
+					if rayVec.Z > 0 {
+						stepZ = 1
+						tDeltaZ = 1 / rayVec.Z
+						tMaxZ = (math.Floor(newPos.Z+1) - newPos.Z) / rayVec.Z
+					} else if rayVec.Z < 0 {
+						stepZ = -1
+						tDeltaZ = 1 / -rayVec.Z
+						tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
+					} else {
+						tMaxZ = math.Inf(1)
+					}
+
+					for i := 0; i < 250; i++ {
+						if tMaxX < tMaxY && tMaxX < tMaxZ {
+							// Idea: store signed distance to nearest block per block
+							// in world map and use it to skip empty space faster.
+							newPos.X += float64(stepX)
+							tMaxX += tDeltaX
+						} else if tMaxY < tMaxZ {
+							newPos.Y += float64(stepY)
+							tMaxY += tDeltaY
+						} else {
+							newPos.Z += float64(stepZ)
+							tMaxZ += tDeltaZ
+						}
+
+						n := newPos.ToPointTrunc()
+						b, ok := world.Get(n)
+						if !ok {
+							// Advance vector to next full block?
+							continue
+						}
+						img.Set(x, y, b.Color)
+
+						if renderMode == renderDepth {
+							v := blockworld.MagmaClamp(float64(i) / 250.)
+							c := color.RGBA{
+								R: uint8(v.X * 255),
+								G: uint8(v.Y * 255),
+								B: uint8(v.Z * 255),
+								A: 255,
+							}
+							img.Set(x, y, c)
+						}
+						break
+					}
+				}
 			}
-
-			stepZ := 0
-			tDeltaZ := 0.0
-			tMaxZ := 0.0
-			if rayVec.Z > 0 {
-				stepZ = 1
-				tDeltaZ = 1 / rayVec.Z
-				tMaxZ = (math.Floor(newPos.Z+1) - newPos.Z) / rayVec.Z
-			} else if rayVec.Z < 0 {
-				stepZ = -1
-				tDeltaZ = 1 / -rayVec.Z
-				tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
-			} else {
-				tMaxZ = math.Inf(1)
-			}
-
-			for i := 0; i < 250; i++ {
-				// newPos = newPos.Add(rayVec)
-				// newPos = newPos.AdvanceToNextBlockBoundary(rayVec)
-
-				if tMaxX < tMaxY && tMaxX < tMaxZ {
-					// Idea: store signed distance to nearest block per block
-					// in world map and use it to skip empty space faster.
-					newPos.X += float64(stepX)
-					tMaxX += tDeltaX
-				} else if tMaxY < tMaxZ {
-					newPos.Y += float64(stepY)
-					tMaxY += tDeltaY
-				} else {
-					newPos.Z += float64(stepZ)
-					tMaxZ += tDeltaZ
-				}
-
-				n := newPos.ToPointTrunc()
-				b, ok := world.Get(n)
-				if !ok {
-					// Advance vector to next full block?
-					continue
-				}
-				if b.Reflective {
-					// Reflect ray by inverting Z component
-					isReflectionRay = true
-					rayVec = blockworld.Vec3{X: rayVec.X, Y: rayVec.Y, Z: -rayVec.Z}
-					newPos = newPos.Add(rayVec)
-					img.Set(x, y, b.Color)
-					continue
-				}
-				if isReflectionRay {
-					c1 := img.At(x, y).(color.RGBA) // Color of the block we reflected off
-					c2 := b.Color
-					c1.A = 200
-					c := utils.CompositeNRGBA(c1, c2)
-					img.Set(x, y, c)
-					break
-				}
-				img.Set(x, y, b.Color)
-				break
-			}
-		}
+		}(t)
 	}
+	wg.Wait()
 
 	img.SetRGBA(img.Rect.Dx()/2, img.Rect.Dy()/2, color.RGBA{R: 255, A: 255})
 
@@ -235,6 +258,7 @@ func main() {
 	}
 
 	window.MakeContextCurrent()
+	window.SetInputMode(glfw.StickyKeysMode, glfw.True)
 
 	glfw.SwapInterval(1)
 
