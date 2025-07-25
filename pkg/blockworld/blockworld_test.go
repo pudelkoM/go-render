@@ -303,39 +303,65 @@ func BenchmarkWorldGetBlock(b *testing.B) {
 }
 
 func BenchmarkTraverseBlockWorld(b *testing.B) {
-	for _, f := range []float64{0, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 1} {
-		b.Run(fmt.Sprintf("TraverseBlockWorld-%v", f), func(b *testing.B) {
+	// for _, f := range []float64{0, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 1} {
+	for _, s := range []int{16, 512, 1024} {
+		for _, f := range []float64{0.01} {
 			world := blockworld.NewBlockworld()
-			dx, dy, dz := 512, 512, 512
+			dx, dy, dz := s, s, s
 			world.SetSize(dx, dy, dz)
 			world.RandomFill(f)
-			x := rand.Intn(dx)
-			y := rand.Intn(dy)
-			z := rand.Intn(dz)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				// Access random location
-				_, _ = world.GetRaw(x, y, z)
-				x = (x + 1) % dx
-				y = (y - 1) % dy
-				z = (z + 2) % dz
-
-				// for z := 0; z < dz; z++ {
-				// 	for y := 0; y < dy; y++ {
-				// 		for x := 0; x < dx; x++ {
-				// 			_, _ = world.GetRaw(x, y, z) // Accessing each block
-				// 		}
-				// 	}
-				// }
-
-				// _, _ = world.GetRaw(i%dx, i%dy, i%dz) // Accessing random blocks
-				// _, _ = world.GetRaw((i+1)%dx, i%dy, (i+1)%dz)
-				// _, _ = world.GetRaw((i+2)%dx, i%dy, i%dz)
-				// _, _ = world.GetRaw((i+3)%dx, i%dy, (i-1)%dz)
-				// _, _ = world.GetRaw((i+3)%dx, (i+1)%dy, i%dz)
-				// _, _ = world.GetRaw((i+3)%dx, (i+2)%dy, (i+1)%dz)
-				// _, _ = world.GetRaw((i+3)%dx, (i+3)%dy, i%dz)
-			}
-		})
+			b.Run(fmt.Sprintf("GetJustRangeCheck-%v-%v", s, f), func(b *testing.B) {
+				x := rand.Intn(dx)
+				y := rand.Intn(dy)
+				z := rand.Intn(dz)
+				b.ResetTimer()
+				for b.Loop() {
+					// Access random location
+					_, _ = world.GetJustRangeCheck(x, y, z)
+					x = (x + 1) % dx
+					y = (y + 2) % dy
+					z = (z + 4) % dz
+				}
+			})
+			b.Run(fmt.Sprintf("GetFlatArray-%v-%v", s, f), func(b *testing.B) {
+				x := rand.Intn(dx)
+				y := rand.Intn(dy)
+				z := rand.Intn(dz)
+				b.ResetTimer()
+				for b.Loop() {
+					// Access random location
+					_, _ = world.GetFlatArray(x, y, z)
+					x = (x + 1) % dx
+					y = (y + 2) % dy
+					z = (z + 4) % dz
+				}
+			})
+			b.Run(fmt.Sprintf("IndexCalc-%v-%v", s, f), func(b *testing.B) {
+				x := rand.Intn(dx)
+				y := rand.Intn(dy)
+				z := rand.Intn(dz)
+				b.ResetTimer()
+				for b.Loop() {
+					// Access random location
+					_ = world.IndexCalc(x, y, z)
+					x = (x + 1) % dx
+					y = (y + 2) % dy
+					z = (z + 4) % dz
+				}
+			})
+			b.Run(fmt.Sprintf("Noop-%v-%v", s, f), func(b *testing.B) {
+				x := rand.Intn(dx)
+				y := rand.Intn(dy)
+				z := rand.Intn(dz)
+				b.ResetTimer()
+				for b.Loop() {
+					// Access random location
+					_ = world.Noop(x, y, z)
+					// x = (x + 1) % dx
+					// y = (y + 2) % dy
+					// z = (z + 4) % dz
+				}
+			})
+		}
 	}
 }

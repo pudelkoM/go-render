@@ -48,6 +48,8 @@ func LoadMap(path string, world *blockworld.Blockworld) error {
 		}
 	}
 
+	world.Finalize()
+
 	return nil
 }
 

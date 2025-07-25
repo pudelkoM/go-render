@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
+	"time"
 )
 
 const blockSizePx = 25
@@ -272,6 +273,7 @@ type Block struct {
 
 type Blockworld struct {
 	blocks      []Block
+	svt         *SVT
 	x, y, z     int
 	BlockSizePx int
 	PlayerPos   Vec3
@@ -287,22 +289,29 @@ func NewBlockworld() *Blockworld {
 	}
 }
 
+func (bw *Blockworld) Finalize() {
+	t0 := time.Now()
+	bw.svt.Reconcile()
+	fmt.Printf("SVT reconcile took %v\n", time.Since(t0))
+}
+
 func (bw *Blockworld) RandomFill(fillPerc float64) {
-	for i := range bw.blocks {
-		if rand.Float64() < fillPerc {
-			bw.blocks[i] = Block{
-				Color: color.NRGBA{
-					R: uint8(rand.Intn(256)),
-					G: uint8(rand.Intn(256)),
-					B: uint8(rand.Intn(256)),
-					A: 255,
-				},
-				IsSet: true,
-			}
-		} else {
-			bw.blocks[i] = Block{}
-		}
-	}
+	bw.svt.RandomFill(fillPerc)
+	// for i := range bw.blocks {
+	// 	if rand.Float64() < fillPerc {
+	// 		bw.blocks[i] = Block{
+	// 			Color: color.NRGBA{
+	// 				R: uint8(rand.Intn(256)),
+	// 				G: uint8(rand.Intn(256)),
+	// 				B: uint8(rand.Intn(256)),
+	// 				A: 255,
+	// 			},
+	// 			IsSet: true,
+	// 		}
+	// 	} else {
+	// 		bw.blocks[i] = Block{}
+	// 	}
+	// }
 }
 
 func (bw *Blockworld) Randomize() {
@@ -332,6 +341,7 @@ func (bw *Blockworld) SetSize(x, y, z int) {
 	bw.y = y
 	bw.z = z
 	bw.blocks = make([]Block, x*y*z)
+	bw.svt = NewSVT(x, y, z)
 }
 
 func (bw *Blockworld) Blocks() []Block {
@@ -339,19 +349,38 @@ func (bw *Blockworld) Blocks() []Block {
 }
 
 func (bw *Blockworld) Get(p Point) (*Block, bool) {
-	if (p.X < 0 || p.X >= bw.x) || (p.Y < 0 || p.Y >= bw.y) || (p.Z < 0 || p.Z >= bw.z) {
-		return nil, false
-	}
-	b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
-	return b, b.IsSet
+	// if (p.X < 0 || p.X >= bw.x) || (p.Y < 0 || p.Y >= bw.y) || (p.Z < 0 || p.Z >= bw.z) {
+	// 	return nil, false
+	// }
+	// b := &bw.blocks[p.X+p.Y*bw.x+p.Z*bw.x*bw.y]
+	// return b, b.IsSet
+
+	// return bw.svt.Get(p.X, p.Y, p.Z)
+	// return bw.svt.GetArr(p.X, p.Y, p.Z)
+	return bw.svt.GetArrBigNode(p.X, p.Y, p.Z)
+	// return bw.svt.GetWithCache(p.X, p.Y, p.Z)
 }
 
-func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
+func (bw *Blockworld) GetFlatArray(x, y, z int) (*Block, bool) {
 	if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
 		return nil, false
 	}
 	b := &bw.blocks[x+y*bw.x+z*bw.x*bw.y]
 	return b, b.IsSet
+}
+
+func (bw *Blockworld) GetRaw(x, y, z int) (*Block, bool) {
+	// if (x < 0 || x >= bw.x) || (y < 0 || y >= bw.y) || (z < 0 || z >= bw.z) {
+	// 	return nil, false
+	// }
+	// b := &bw.blocks[x+y*bw.x+z*bw.x*bw.y]
+	// return b, b.IsSet
+
+	// return bw.svt.Get(x, y, z)
+	// return bw.svt.GetArr(x, y, z)
+
+	return bw.svt.GetArrBigNode(x, y, z)
+	// return bw.svt.GetWithCache(x, y, z)
 }
 
 func (bw *Blockworld) Set(x, y, z int, b Block) {
@@ -360,4 +389,23 @@ func (bw *Blockworld) Set(x, y, z int, b Block) {
 	}
 	b.IsSet = true
 	bw.blocks[x+y*bw.x+z*bw.x*bw.y] = b
+
+	b.IsSet = true
+	// bw.svt.Set(x, y, z, b)
+	bw.svt.SetArr(x, y, z, b)
+}
+
+func (bw *Blockworld) GetJustRangeCheck(x, y, z int) (*Block, bool) {
+	if x < 0 || x >= bw.x || y < 0 || y >= bw.y || z < 0 || z >= bw.z {
+		return nil, false
+	}
+	return nil, true
+}
+
+func (bw *Blockworld) IndexCalc(x, y, z int) int {
+	return x + y*bw.x + z*bw.x*bw.y
+}
+
+func (bw *Blockworld) Noop(x, y, z int) int {
+	return 0
 }
