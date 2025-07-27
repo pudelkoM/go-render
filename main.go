@@ -158,14 +158,58 @@ func castRayAmatidesWoo(img *image.RGBA, world *blockworld.Blockworld,
 	}
 }
 
+func rayMarchSdf(img *image.RGBA, world *blockworld.Blockworld,
+	x, y int, rayPos, rayDir blockworld.Vec3) {
+	newPos := world.RayMarchSdf(world.PlayerPos, rayDir)
+	{
+		n := newPos.ToPointTrunc()
+		b, _ := world.Get(n)
+		if b == nil {
+			// End of map reached, stop looking.
+			return
+		}
+
+		face := blockworld.GetBlockFace(newPos, n)
+		orig := b.Color
+		switch face {
+		case blockworld.BLOCK_FACE_TOP:
+			rayDir.Z = -rayDir.Z
+			newPos.Z += 0.001
+		case blockworld.BLOCK_FACE_BOTTOM:
+			rayDir.Z = -rayDir.Z
+			newPos.Z -= 0.001
+		case blockworld.BLOCK_FACE_LEFT:
+			rayDir.X = -rayDir.X
+			newPos.X -= 0.001
+		case blockworld.BLOCK_FACE_RIGHT:
+			rayDir.X = -rayDir.X
+			newPos.X += 0.001
+		case blockworld.BLOCK_FACE_FRONT:
+			rayDir.Y = -rayDir.Y
+			newPos.Y += 0.001
+		case blockworld.BLOCK_FACE_BACK:
+			rayDir.Y = -rayDir.Y
+			newPos.Y -= 0.001
+		default:
+			img.Set(x, y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+		}
+		// Reflected ray
+		newPos := world.RayMarchSdf(newPos, rayDir)
+		n = newPos.ToPointTrunc()
+		bRef, _ := world.Get(n)
+		if bRef != nil {
+			c := utils.CompositeNRGBA(orig, bRef.Color)
+			img.Set(x, y, c) // flip y coord because ogl texture use bottom-left as origin
+		} else {
+			img.Set(x, y, b.Color) // flip y coord because ogl texture use bottom-left as origin
+		}
+	}
+}
+
 func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 	lastFrameDuration time.Duration) {
 	// clear image
 	draw.Draw(img, img.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
-
-	// depth buffer
-	depth := image.NewGray16(image.Rect(0, 0, img.Rect.Dx(), img.Rect.Dy()))
-	draw.Draw(depth, depth.Rect, image.NewUniform(color.Gray{Y: 0}), image.ZP, draw.Src)
 
 	imgRatio := float64(img.Rect.Dy()) / float64(img.Rect.Dx())
 	fovHDeg := 55.
@@ -200,58 +244,8 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 					if false {
 						castRayAmatidesWoo(img, world, x, y, newPos, rayVec)
 					} else {
-						newPos := world.RayMarchSdf(world.PlayerPos, rayVec)
-						{
-							n := newPos.ToPointTrunc()
-							b, _ := world.Get(n)
-							if b == nil {
-								// End of map reached, stop looking.
-								continue
-							}
-
-							face := blockworld.GetBlockFace(newPos, n)
-							orig := b.Color
-							switch face {
-							case blockworld.BLOCK_FACE_TOP:
-								rayVec.Z = -rayVec.Z
-								newPos.Z += 0.001
-							case blockworld.BLOCK_FACE_BOTTOM:
-								rayVec.Z = -rayVec.Z
-								newPos.Z -= 0.001
-							case blockworld.BLOCK_FACE_LEFT:
-								rayVec.X = -rayVec.X
-								newPos.X -= 0.001
-							case blockworld.BLOCK_FACE_RIGHT:
-								rayVec.X = -rayVec.X
-								newPos.X += 0.001
-							case blockworld.BLOCK_FACE_FRONT:
-								rayVec.Y = -rayVec.Y
-								newPos.Y += 0.001
-							case blockworld.BLOCK_FACE_BACK:
-								rayVec.Y = -rayVec.Y
-								newPos.Y -= 0.001
-							default:
-								img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
-							}
-							// Reflected ray
-							newPos := world.RayMarchSdf(newPos, rayVec)
-							n = newPos.ToPointTrunc()
-							bRef, _ := world.Get(n)
-							if bRef != nil {
-								c := utils.CompositeNRGBA(orig, bRef.Color)
-								img.Set(x, img.Rect.Dy()-y, c) // flip y coord because ogl texture use bottom-left as origin
-							} else {
-								img.Set(x, img.Rect.Dy()-y, b.Color) // flip y coord because ogl texture use bottom-left as origin
-							}
-
-							if x == img.Rect.Dx()/2 && y == img.Rect.Dy()/2 {
-								fmt.Println("newPos", newPos, "n", n, "Face", face)
-								img.SetRGBA(x, img.Rect.Dy()-y, color.RGBA{R: 255, A: 255})
-							}
-
-						}
+						rayMarchSdf(img, world, x, y, newPos, rayVec)
 					}
-
 				}
 			}
 		}(t)
@@ -285,7 +279,7 @@ func main() {
 
 	glfw.WindowHint(glfw.DoubleBuffer, glfw.True)
 	glfw.WindowHint(glfw.FocusOnShow, glfw.True)
-	window, err := glfw.CreateWindow(1296, 729, "My Window", nil, nil)
+	window, err := glfw.CreateWindow(640, 480, "My Window", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -323,30 +317,8 @@ func main() {
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 	}
 
-	var textureOverlay uint32
-	{
-		gl.GenTextures(1, &textureOverlay)
-
-		gl.BindTexture(gl.TEXTURE_2D, textureOverlay)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	}
-
-	var framebufferOverlay uint32
-	{
-		gl.GenFramebuffers(1, &framebufferOverlay)
-		gl.BindFramebuffer(gl.FRAMEBUFFER, framebufferOverlay)
-		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureOverlay, 0)
-
-		gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebufferOverlay)
-		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
-	}
-
-	const renderScale = 16
+	const renderScale = 4
 	var w, h = window.GetFramebufferSize()
-	imgOverlay := image.NewRGBA(image.Rect(0, 0, w, h))
 	w /= renderScale
 	h /= renderScale
 	var img = image.NewRGBA(image.Rect(0, 0, w, h))
@@ -370,10 +342,6 @@ func main() {
 	// Starting window.
 	// world.PlayerPos = blockworld.Vec3{X: 154, Y: 256.5, Z: 40}
 	// world.PlayerDir = blockworld.Angle3{Theta: 90, Phi: 0}
-
-	for i := imgOverlay.Rect.Min.X; i < imgOverlay.Rect.Max.X; i++ {
-		imgOverlay.Set(i, i, color.RGBA{R: 255, A: 255})
-	}
 
 	var frameCount int64 = 0
 	var lastFrame = time.Now()
