@@ -226,7 +226,7 @@ func main() {
 
 	glfw.WindowHint(glfw.DoubleBuffer, glfw.True)
 	glfw.WindowHint(glfw.FocusOnShow, glfw.True)
-	window, err := glfw.CreateWindow(640, 480, "My Window", nil, nil)
+	window, err := glfw.CreateWindow(800, 600, "My Window", nil, nil)
 	if err != nil {
 		panic(err)
 	}
