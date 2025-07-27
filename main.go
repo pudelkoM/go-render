@@ -105,67 +105,37 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 }
 
 func castRayAmatidesWoo(img *image.RGBA, world *blockworld.Blockworld,
-	x, y int, newPos, rayVec blockworld.Vec3) {
-	stepX := 0
-	tDeltaX := 0.0
-	tMaxX := 0.0
-	if rayVec.X > 0 {
-		stepX = 1
-		tDeltaX = 1 / rayVec.X
-		tMaxX = (math.Floor(newPos.X+1) - newPos.X) / rayVec.X
-	} else if rayVec.X < 0 {
-		stepX = -1
-		tDeltaX = 1 / -rayVec.X
-		tMaxX = (math.Ceil(newPos.X-1) - newPos.X) / rayVec.X
-	} else {
-		tMaxX = math.Inf(1)
+	x, y int, rayPos, rayDir blockworld.Vec3) {
+
+	fn := func(pos, dir float64) (int, float64, float64) {
+		if dir > 0 {
+			return 1, 1 / dir, (math.Floor(pos+1) - pos) / dir
+		} else if dir < 0 {
+			return -1, 1 / -dir, (math.Ceil(pos-1) - pos) / dir
+		} else {
+			return 0, 0, math.Inf(1)
+		}
 	}
 
-	stepY := 0
-	tDeltaY := 0.0
-	tMaxY := 0.0
-	if rayVec.Y > 0 {
-		stepY = 1
-		tDeltaY = 1 / rayVec.Y
-		tMaxY = (math.Floor(newPos.Y+1) - newPos.Y) / rayVec.Y
-	} else if rayVec.Y < 0 {
-		stepY = -1
-		tDeltaY = 1 / -rayVec.Y
-		tMaxY = (math.Ceil(newPos.Y-1) - newPos.Y) / rayVec.Y
-	} else {
-		tMaxY = math.Inf(1)
-	}
-
-	stepZ := 0
-	tDeltaZ := 0.0
-	tMaxZ := 0.0
-	if rayVec.Z > 0 {
-		stepZ = 1
-		tDeltaZ = 1 / rayVec.Z
-		tMaxZ = (math.Floor(newPos.Z+1) - newPos.Z) / rayVec.Z
-	} else if rayVec.Z < 0 {
-		stepZ = -1
-		tDeltaZ = 1 / -rayVec.Z
-		tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
-	} else {
-		tMaxZ = math.Inf(1)
-	}
+	stepX, tDeltaX, tMaxX := fn(rayPos.X, rayDir.X)
+	stepY, tDeltaY, tMaxY := fn(rayPos.Y, rayDir.Y)
+	stepZ, tDeltaZ, tMaxZ := fn(rayPos.Z, rayDir.Z)
 
 	for i := 0; i < 250; i++ {
 		if tMaxX < tMaxY && tMaxX < tMaxZ {
 			// Idea: store signed distance to nearest block per block
 			// in world map and use it to skip empty space faster.
-			newPos.X += float64(stepX)
+			rayPos.X += float64(stepX)
 			tMaxX += tDeltaX
 		} else if tMaxY < tMaxZ {
-			newPos.Y += float64(stepY)
+			rayPos.Y += float64(stepY)
 			tMaxY += tDeltaY
 		} else {
-			newPos.Z += float64(stepZ)
+			rayPos.Z += float64(stepZ)
 			tMaxZ += tDeltaZ
 		}
 
-		n := newPos.ToPointTrunc()
+		n := rayPos.ToPointTrunc()
 		b, ok := world.Get(n)
 		if !ok {
 			// Advance vector to next full block?
