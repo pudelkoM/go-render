@@ -104,6 +104,89 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 	}
 }
 
+func castRayAmatidesWoo(img *image.RGBA, world *blockworld.Blockworld,
+	x, y int, newPos, rayVec blockworld.Vec3) {
+	stepX := 0
+	tDeltaX := 0.0
+	tMaxX := 0.0
+	if rayVec.X > 0 {
+		stepX = 1
+		tDeltaX = 1 / rayVec.X
+		tMaxX = (math.Floor(newPos.X+1) - newPos.X) / rayVec.X
+	} else if rayVec.X < 0 {
+		stepX = -1
+		tDeltaX = 1 / -rayVec.X
+		tMaxX = (math.Ceil(newPos.X-1) - newPos.X) / rayVec.X
+	} else {
+		tMaxX = math.Inf(1)
+	}
+
+	stepY := 0
+	tDeltaY := 0.0
+	tMaxY := 0.0
+	if rayVec.Y > 0 {
+		stepY = 1
+		tDeltaY = 1 / rayVec.Y
+		tMaxY = (math.Floor(newPos.Y+1) - newPos.Y) / rayVec.Y
+	} else if rayVec.Y < 0 {
+		stepY = -1
+		tDeltaY = 1 / -rayVec.Y
+		tMaxY = (math.Ceil(newPos.Y-1) - newPos.Y) / rayVec.Y
+	} else {
+		tMaxY = math.Inf(1)
+	}
+
+	stepZ := 0
+	tDeltaZ := 0.0
+	tMaxZ := 0.0
+	if rayVec.Z > 0 {
+		stepZ = 1
+		tDeltaZ = 1 / rayVec.Z
+		tMaxZ = (math.Floor(newPos.Z+1) - newPos.Z) / rayVec.Z
+	} else if rayVec.Z < 0 {
+		stepZ = -1
+		tDeltaZ = 1 / -rayVec.Z
+		tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
+	} else {
+		tMaxZ = math.Inf(1)
+	}
+
+	for i := 0; i < 250; i++ {
+		if tMaxX < tMaxY && tMaxX < tMaxZ {
+			// Idea: store signed distance to nearest block per block
+			// in world map and use it to skip empty space faster.
+			newPos.X += float64(stepX)
+			tMaxX += tDeltaX
+		} else if tMaxY < tMaxZ {
+			newPos.Y += float64(stepY)
+			tMaxY += tDeltaY
+		} else {
+			newPos.Z += float64(stepZ)
+			tMaxZ += tDeltaZ
+		}
+
+		n := newPos.ToPointTrunc()
+		b, ok := world.Get(n)
+		if !ok {
+			// Advance vector to next full block?
+			continue
+		}
+		img.Set(x, y, b.Color)
+
+		if renderMode == renderDepth {
+			v := blockworld.MagmaClamp(float64(i) / 250.)
+			c := color.RGBA{
+				R: uint8(v.X * 255),
+				G: uint8(v.Y * 255),
+				B: uint8(v.Z * 255),
+				A: 255,
+			}
+			img.Set(x, y, c)
+		}
+		break
+	}
+}
+
 func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 	lastFrameDuration time.Duration) {
 	// clear image
@@ -114,7 +197,7 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 	fovVDeg := fovHDeg * imgRatio
 	degPerPixel := fovHDeg / float64(img.Rect.Dx())
 
-	const threads = 8
+	const threads = 4
 	yDD := int(math.Ceil(float64(img.Rect.Dy()) / threads))
 	wg := sync.WaitGroup{}
 	wg.Add(threads)
@@ -139,85 +222,7 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
 					newPos := world.PlayerPos
 
-					stepX := 0
-					tDeltaX := 0.0
-					tMaxX := 0.0
-					if rayVec.X > 0 {
-						stepX = 1
-						tDeltaX = 1 / rayVec.X
-						tMaxX = (math.Floor(newPos.X+1) - newPos.X) / rayVec.X
-					} else if rayVec.X < 0 {
-						stepX = -1
-						tDeltaX = 1 / -rayVec.X
-						tMaxX = (math.Ceil(newPos.X-1) - newPos.X) / rayVec.X
-					} else {
-						tMaxX = math.Inf(1)
-					}
-
-					stepY := 0
-					tDeltaY := 0.0
-					tMaxY := 0.0
-					if rayVec.Y > 0 {
-						stepY = 1
-						tDeltaY = 1 / rayVec.Y
-						tMaxY = (math.Floor(newPos.Y+1) - newPos.Y) / rayVec.Y
-					} else if rayVec.Y < 0 {
-						stepY = -1
-						tDeltaY = 1 / -rayVec.Y
-						tMaxY = (math.Ceil(newPos.Y-1) - newPos.Y) / rayVec.Y
-					} else {
-						tMaxY = math.Inf(1)
-					}
-
-					stepZ := 0
-					tDeltaZ := 0.0
-					tMaxZ := 0.0
-					if rayVec.Z > 0 {
-						stepZ = 1
-						tDeltaZ = 1 / rayVec.Z
-						tMaxZ = (math.Floor(newPos.Z+1) - newPos.Z) / rayVec.Z
-					} else if rayVec.Z < 0 {
-						stepZ = -1
-						tDeltaZ = 1 / -rayVec.Z
-						tMaxZ = (math.Ceil(newPos.Z-1) - newPos.Z) / rayVec.Z
-					} else {
-						tMaxZ = math.Inf(1)
-					}
-
-					for i := 0; i < 250; i++ {
-						if tMaxX < tMaxY && tMaxX < tMaxZ {
-							// Idea: store signed distance to nearest block per block
-							// in world map and use it to skip empty space faster.
-							newPos.X += float64(stepX)
-							tMaxX += tDeltaX
-						} else if tMaxY < tMaxZ {
-							newPos.Y += float64(stepY)
-							tMaxY += tDeltaY
-						} else {
-							newPos.Z += float64(stepZ)
-							tMaxZ += tDeltaZ
-						}
-
-						n := newPos.ToPointTrunc()
-						b, ok := world.Get(n)
-						if !ok {
-							// Advance vector to next full block?
-							continue
-						}
-						img.Set(x, y, b.Color)
-
-						if renderMode == renderDepth {
-							v := blockworld.MagmaClamp(float64(i) / 250.)
-							c := color.RGBA{
-								R: uint8(v.X * 255),
-								G: uint8(v.Y * 255),
-								B: uint8(v.Z * 255),
-								A: 255,
-							}
-							img.Set(x, y, c)
-						}
-						break
-					}
+					castRayAmatidesWoo(img, world, x, y, newPos, rayVec)
 				}
 			}
 		}(t)
