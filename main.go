@@ -142,7 +142,13 @@ func castRayAmatidesWoo(img *image.RGBA, world *blockworld.Blockworld,
 			// Advance vector to next full block?
 			continue
 		}
-		img.Set(x, y, b.Color)
+
+		// Color-space conversion without interfaces and heap allocations.
+		{
+			r, g, b, a := b.Color.RGBA()
+			c := color.RGBA{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8), uint8(a >> 8)}
+			img.SetRGBA(x, y, c)
+		}
 
 		if renderMode == renderDepth {
 			v := blockworld.MagmaClamp(float64(i) / maxStep)
@@ -152,7 +158,7 @@ func castRayAmatidesWoo(img *image.RGBA, world *blockworld.Blockworld,
 				B: uint8(v.Z * 255),
 				A: 255,
 			}
-			img.Set(x, y, c)
+			img.SetRGBA(x, y, c)
 		}
 		break
 	}
