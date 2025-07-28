@@ -96,10 +96,12 @@ func (a Angle3) ResetTheta() Angle3 {
 func (a Angle3) ToCartesianVec3(r float64) Vec3 {
 	thetaRad := a.Theta * math.Pi / 180
 	phiRad := a.Phi * math.Pi / 180
+	sinTheta, cosTheta := math.Sincos(thetaRad)
+	sinPhi, cosPhi := math.Sincos(phiRad)
 	return Vec3{
-		X: r * math.Sin(thetaRad) * math.Cos(phiRad),
-		Y: r * math.Sin(thetaRad) * math.Sin(phiRad),
-		Z: r * math.Cos(thetaRad),
+		X: r * sinTheta * cosPhi,
+		Y: r * sinTheta * sinPhi,
+		Z: r * cosTheta,
 	}
 }
 
