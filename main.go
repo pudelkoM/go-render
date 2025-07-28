@@ -106,6 +106,7 @@ func handleInputs(w *glfw.Window, world *blockworld.Blockworld) {
 
 func castRayAmatidesWoo(img *image.RGBA, world *blockworld.Blockworld,
 	x, y int, rayPos, rayDir blockworld.Vec3) {
+	const maxStep = 250
 
 	fn := func(pos, dir float64) (int, float64, float64) {
 		if dir > 0 {
@@ -121,7 +122,7 @@ func castRayAmatidesWoo(img *image.RGBA, world *blockworld.Blockworld,
 	stepY, tDeltaY, tMaxY := fn(rayPos.Y, rayDir.Y)
 	stepZ, tDeltaZ, tMaxZ := fn(rayPos.Z, rayDir.Z)
 
-	for i := 0; i < 250; i++ {
+	for i := 0; i < maxStep; i++ {
 		if tMaxX < tMaxY && tMaxX < tMaxZ {
 			// Idea: store signed distance to nearest block per block
 			// in world map and use it to skip empty space faster.
@@ -144,7 +145,7 @@ func castRayAmatidesWoo(img *image.RGBA, world *blockworld.Blockworld,
 		img.Set(x, y, b.Color)
 
 		if renderMode == renderDepth {
-			v := blockworld.MagmaClamp(float64(i) / 250.)
+			v := blockworld.MagmaClamp(float64(i) / maxStep)
 			c := color.RGBA{
 				R: uint8(v.X * 255),
 				G: uint8(v.Y * 255),
