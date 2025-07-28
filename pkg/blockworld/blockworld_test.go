@@ -250,7 +250,7 @@ func BenchmarkMapIter(b *testing.B) {
 			}
 			count := 0
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				for _, _ = range world.Blocks() {
 					count++
 				}
@@ -263,11 +263,12 @@ func BenchmarkViewPortRotateRay(b *testing.B) {
 	viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
 	theta := 90.0
 	phi := 0.0
-	rayVec := blockworld.Vec3{}
 	b.Run("2-step", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			rayVec = viewVec.RotateY(float64(i)).RotateZ(float64(i))
-			rayVec = rayVec.RotateY(theta - 90).RotateZ(phi)
+		f := 90.0
+		for b.Loop() {
+			_ = viewVec.RotateY(f).RotateZ(-f).
+				RotateY(theta - 90).RotateZ(phi)
+			f += 0.1
 		}
 	})
 }
