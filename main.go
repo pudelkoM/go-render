@@ -187,12 +187,10 @@ func renderBuf(img *image.RGBA, world *blockworld.Blockworld, frameCount int64,
 				yd := (-fovVDeg / 2) + float64(y)*degPerPixel
 				for x := 0; x < img.Rect.Dx(); x++ {
 					xd := (-fovHDeg / 2) + float64(x)*degPerPixel
-					viewVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}
-					rayVec := viewVec.RotateY(yd).RotateZ(xd)
-					rayVec = rayVec.RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
-					newPos := world.PlayerPos
-
-					castRayAmatidesWoo(img, world, x, y, newPos, rayVec)
+					rayVec := blockworld.Vec3{X: 1, Y: 0, Z: 0}.
+						RotateY(yd).RotateZ(xd).
+						RotateY(world.PlayerDir.Theta - 90).RotateZ(world.PlayerDir.Phi)
+					castRayAmatidesWoo(img, world, x, y, world.PlayerPos, rayVec)
 				}
 			}
 		}(t)
